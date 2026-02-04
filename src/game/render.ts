@@ -98,25 +98,33 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const panelWidth = 320;
+  const panelHeight = 96;
+  const padding = 8;
+  const viewportWidth = getViewportWidth(state.map);
+  const x = viewportWidth - panelWidth - padding;
+  const y = padding;
+
   ctx.fillStyle = "rgba(15, 17, 22, 0.8)";
-  ctx.fillRect(8, 8, 320, 96);
+  ctx.fillRect(x, y, panelWidth, panelHeight);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.strokeRect(8, 8, 320, 96);
+  ctx.strokeRect(x, y, panelWidth, panelHeight);
 
   ctx.fillStyle = "#e7e7e7";
   ctx.font = "14px 'Noto Sans JP', sans-serif";
   ctx.textBaseline = "top";
+  ctx.textAlign = "left";
 
   const faction = state.factions[state.turn.factionIndex];
   const selectedUnit = state.selectedUnitId !== null
     ? state.units.find((unit) => unit.id === state.selectedUnitId)
     : undefined;
 
-  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, 16, 16);
-  ctx.fillText(`Turn: ${state.turn.turnNumber}`, 16, 36);
-  ctx.fillText(`Faction: ${faction.name}`, 16, 56);
-  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, 140, 56);
+  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + 8, y + 8);
+  ctx.fillText(`Turn: ${state.turn.turnNumber}`, x + 8, y + 28);
+  ctx.fillText(`Faction: ${faction.name}`, x + 8, y + 48);
+  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
 };
 
 const getTileColor = (type: TileType): string => {
