@@ -197,6 +197,44 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
   }
 };
 
+export const handleTileClick = (state: GameState, x: number, y: number): void => {
+  state.cursor.x = clamp(x, 0, state.map.width - 1);
+  state.cursor.y = clamp(y, 0, state.map.height - 1);
+
+  if (state.hireMenuOpen) {
+    return;
+  }
+
+  if (state.magicMode) {
+    tryCastSpellAtCursor(state);
+    return;
+  }
+
+  if (state.attackMode) {
+    tryAttackAtCursor(state);
+    return;
+  }
+
+  if (state.selectedUnitId === null) {
+    const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
+    if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
+      state.selectedUnitId = unit.id;
+      state.movementRange = unit.food > 0 ? getMovementRange(state, unit) : null;
+    }
+    return;
+  }
+
+  tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
+};
+
+export const clearSelection = (state: GameState): void => {
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
+  state.hireMenuOpen = false;
+  state.magicMode = false;
+};
+
 const startTurn = (state: GameState): void => {
   for (const unit of state.units) {
     if (unit.faction === state.turn.currentFaction) {
