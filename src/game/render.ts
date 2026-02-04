@@ -1,4 +1,4 @@
-import { GameState } from "./state";
+import { GameState, getEnemyZocTiles } from "./state";
 import { HUD_HEIGHT, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, UnitType } from "./types";
@@ -11,6 +11,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
 
   drawTiles(ctx, state);
   drawMoveRange(ctx, state);
+  drawZoc(ctx, state);
   drawGrid(ctx, state);
   drawUnits(ctx, state);
   drawCursor(ctx, state);
@@ -76,6 +77,18 @@ const drawMoveRange = (ctx: CanvasRenderingContext2D, state: GameState): void =>
 
   ctx.fillStyle = "rgba(88, 160, 255, 0.25)";
   for (const index of state.movementRange.reachable) {
+    const x = index % state.map.width;
+    const y = Math.floor(index / state.map.width);
+    const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
+    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+  }
+};
+
+const drawZoc = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const zoc = getEnemyZocTiles(state.units, state.turn.currentFaction, state.map.width, state.map.height);
+  ctx.fillStyle = "rgba(255, 88, 88, 0.18)";
+
+  for (const index of zoc) {
     const x = index % state.map.width;
     const y = Math.floor(index / state.map.width);
     const { x: canvasX, y: canvasY } = boardToCanvas(x, y);

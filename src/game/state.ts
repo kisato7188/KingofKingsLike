@@ -100,6 +100,7 @@ const endTurn = (state: GameState): void => {
     state.turn.roundCount += 1;
   }
   state.selectedUnitId = null;
+  state.movementRange = null;
   startTurn(state);
 };
 
@@ -112,6 +113,7 @@ const clamp = (value: number, min: number, max: number): number => {
 };
 
 const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult => {
+  const enemyZoc = getEnemyZocTiles(state.units, unit.faction, state.map.width, state.map.height);
   return findReachableTiles({
     width: state.map.width,
     height: state.map.height,
@@ -120,7 +122,8 @@ const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult =
     maxCost: unit.movePoints,
     maxSteps: unit.food,
     toIndex: (x, y) => getTileIndex(x, y, state.map.width),
-    isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
+    isPassable: (x, y) =>
+      !isOccupied(state, x, y, unit.id) && !isBlockedByZoc(enemyZoc, x, y, unit, state.map.width),
     getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
   });
 };
@@ -163,6 +166,42 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
 
 const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
   return state.units.some((unit) => unit.id !== ignoreId && unit.x === x && unit.y === y);
+};
+
+export const getEnemyZocTiles = (
+  units: Unit[],
+  actingFaction: FactionId,
+  width: number,
+  height: number,
+): Set<number> => {
+  const zoc = new Set<number>();
+  for (const unit of units) {
+    if (unit.faction === actingFaction) {
+      continue;
+    }
+
+    const neighbors = [
+      { x: unit.x + 1, y: unit.y },
+      { x: unit.x - 1, y: unit.y },
+      { x: unit.x, y: unit.y + 1 },
+      { x: unit.x, y: unit.y - 1 },
+    ];
+
+    for (const pos of neighbors) {
+      if (pos.x < 0 || pos.y < 0 || pos.x >= width || pos.y >= height) {
+        continue;
+      }
+      zoc.add(getTileIndex(pos.x, pos.y, width));
+    }
+  }
+  return zoc;
+};
+
+const isBlockedByZoc = (zoc: Set<number>, x: number, y: number, unit: Unit, width: number): boolean => {
+  if (x === unit.x && y === unit.y) {
+    return false;
+  }
+  return zoc.has(getTileIndex(x, y, width));
 };
 
 const getMoveCostForTile = (state: GameState, x: number, y: number): number => {
