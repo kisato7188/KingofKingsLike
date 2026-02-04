@@ -7,7 +7,14 @@
   </head>
   <body>
     <div id="app">
-      <canvas id="game-canvas"></canvas>
+      <div id="game-wrap">
+        <canvas id="game-canvas"></canvas>
+        <div id="bgm-controls">
+          <button id="bgm-play" type="button">BGM 再生</button>
+          <button id="bgm-stop" type="button">BGM 停止</button>
+          <span id="bgm-status" aria-live="polite"></span>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -16,9 +16,46 @@ bgm.loop = true;
 bgm.volume = 0.5;
 bgm.preload = "auto";
 
-const tryStartBgm = (): void => {
-  void bgm.play();
-  window.removeEventListener("pointerdown", tryStartBgm);
+const playButton = document.getElementById("bgm-play") as HTMLButtonElement | null;
+const stopButton = document.getElementById("bgm-stop") as HTMLButtonElement | null;
+const status = document.getElementById("bgm-status");
+
+const setStatus = (message: string): void => {
+  if (status) {
+    status.textContent = message;
+  }
 };
 
-window.addEventListener("pointerdown", tryStartBgm, { once: true });
+const playBgm = async (): Promise<void> => {
+  try {
+    setStatus("再生中");
+    await bgm.play();
+  } catch (error) {
+    console.error(error);
+    setStatus("再生失敗");
+  }
+};
+
+const stopBgm = (): void => {
+  bgm.pause();
+  bgm.currentTime = 0;
+  setStatus("停止中");
+};
+
+playButton?.addEventListener("click", () => {
+  void playBgm();
+});
+
+stopButton?.addEventListener("click", () => {
+  stopBgm();
+});
+
+bgm.addEventListener("play", () => {
+  setStatus("再生中");
+});
+
+bgm.addEventListener("pause", () => {
+  if (bgm.currentTime === 0) {
+    setStatus("停止中");
+  }
+});
