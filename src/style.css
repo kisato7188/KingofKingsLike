@@ -25,53 +25,10 @@ body {
   justify-content: center;
 }
 
-#game-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-}
-
 #game-canvas {
   width: auto;
   height: auto;
   image-rendering: pixelated;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: #1b1f2a;
-}
-
-#bgm-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-#bgm-url {
-  min-width: 280px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #121620;
-  color: #e7e7e7;
-}
-
-#bgm-controls button {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: #2a2f3d;
-  color: #e7e7e7;
-  cursor: pointer;
-}
-
-#bgm-controls button:hover {
-  background: #343a4b;
-}
-
-#bgm-status {
-  min-width: 120px;
-  color: rgba(231, 231, 231, 0.7);
 }
