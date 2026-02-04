@@ -6,10 +6,12 @@ export type UnitCatalogEntry = {
   hireCost: number;
   movePoints: number;
   food: number;
+  maxFood: number;
   power: number;
   defense: number;
   level: number;
   hp: number;
+  maxHp: number;
 };
 
 export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
@@ -19,10 +21,12 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hireCost: 60,
     movePoints: 3,
     food: 25,
+    maxFood: 25,
     power: 6,
     defense: 3,
     level: 1,
     hp: 14,
+    maxHp: 14,
   },
   [UnitType.Archer]: {
     type: UnitType.Archer,
@@ -30,10 +34,12 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hireCost: 70,
     movePoints: 3,
     food: 20,
+    maxFood: 20,
     power: 5,
     defense: 2,
     level: 1,
     hp: 12,
+    maxHp: 12,
   },
   [UnitType.Knight]: {
     type: UnitType.Knight,
@@ -41,10 +47,12 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hireCost: 120,
     movePoints: 4,
     food: 30,
+    maxFood: 30,
     power: 8,
     defense: 5,
     level: 1,
     hp: 18,
+    maxHp: 18,
   },
   [UnitType.Mage]: {
     type: UnitType.Mage,
@@ -52,10 +60,12 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hireCost: 90,
     movePoints: 3,
     food: 22,
+    maxFood: 22,
     power: 7,
     defense: 2,
     level: 1,
     hp: 10,
+    maxHp: 10,
   },
   [UnitType.King]: {
     type: UnitType.King,
@@ -63,10 +73,12 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hireCost: 0,
     movePoints: 4,
     food: 50,
+    maxFood: 50,
     power: 8,
     defense: 5,
     level: 1,
     hp: 20,
+    maxHp: 20,
   },
 };
 

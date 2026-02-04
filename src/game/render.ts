@@ -1,4 +1,4 @@
-import { GameState, canHireAtCastle, canHireUnitType, canOccupy, getEnemyZocTiles } from "./state";
+import { GameState, canHireAtCastle, canHireUnitType, canOccupy, canSupply, getEnemyZocTiles } from "./state";
 import { HUD_HEIGHT, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
@@ -129,7 +129,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 192;
+  const panelHeight = 208;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -159,18 +159,22 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillStyle = "#e7e7e7";
   ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
   if (selectedUnit) {
-    ctx.fillText(`Food: ${selectedUnit.food}`, x + 8, y + 88);
+    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, y + 88);
+    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, y + 108);
     if (hasAdjacentEnemy(state, selectedUnit)) {
-      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 108);
+      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 128);
     }
     if (canOccupyHere(state, selectedUnit)) {
-      ctx.fillText("Command: Occupy (O)", x + 8, y + 128);
+      ctx.fillText("Command: Occupy (O)", x + 8, y + 148);
     }
     if (canHireHere(state, selectedUnit)) {
-      ctx.fillText("Command: Hire (H)", x + 8, y + 148);
+      ctx.fillText("Command: Hire (H)", x + 8, y + 168);
+    }
+    if (canSupplyHere(state, selectedUnit)) {
+      ctx.fillText("Command: Supply (S)", x + 8, y + 188);
     }
   }
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 168);
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 188);
 };
 
 const getTileColor = (type: TileType): string => {
@@ -206,6 +210,14 @@ const canOccupyHere = (state: GameState, unit: Unit): boolean => {
 
 const canHireHere = (state: GameState, unit: Unit): boolean => {
   return canHireAtCastle(state, unit);
+};
+
+const canSupplyHere = (state: GameState, unit: Unit): boolean => {
+  if (unit.x !== state.cursor.x || unit.y !== state.cursor.y || unit.acted) {
+    return false;
+  }
+  const tile = state.map.tiles[getTileIndex(unit.x, unit.y, state.map.width)];
+  return canSupply(unit, tile, unit.faction);
 };
 
 const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {

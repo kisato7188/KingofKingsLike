@@ -41,11 +41,13 @@ export type Unit = {
   y: number;
   movePoints: number;
   food: number;
+  maxFood: number;
   acted: boolean;
   power: number;
   defense: number;
   level: number;
   hp: number;
+  maxHp: number;
 };
 
 export type Faction = {

@@ -27,6 +27,8 @@ export type GameState = {
   hireSelectionIndex: number;
   hireConsumesAction: boolean;
   nextUnitId: number;
+  costFoodPer1: number;
+  costHpPer1: number;
   budgets: Record<FactionId, number>;
   baseIncome: number;
   incomePerTown: number;
@@ -54,6 +56,8 @@ export const createInitialState = (): GameState => {
     hireSelectionIndex: 0,
     hireConsumesAction: false,
     nextUnitId: Math.max(0, ...scenario.units.map((unit) => unit.id)) + 1,
+    costFoodPer1: 2,
+    costHpPer1: 5,
     budgets: {
       [FactionId.Blue]: 0,
       [FactionId.Red]: 0,
@@ -107,6 +111,10 @@ export const updateState = (state: GameState, input: Input): void => {
 
   if (input.isPressed("KeyO")) {
     tryOccupyAtCursor(state);
+  }
+
+  if (input.isPressed("KeyS")) {
+    trySupplyAtCursor(state);
   }
 
   if (input.isPressed("KeyH")) {
@@ -256,6 +264,47 @@ const tryOccupyAtCursor = (state: GameState): void => {
   }
 
   unit.acted = true;
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
+  state.hireMenuOpen = false;
+};
+
+const trySupplyAtCursor = (state: GameState): void => {
+  if (state.selectedUnitId === null) {
+    return;
+  }
+
+  const unitIndex = state.units.findIndex((entry) => entry.id === state.selectedUnitId);
+  if (unitIndex === -1) {
+    return;
+  }
+
+  const unit = state.units[unitIndex];
+  if (unit.acted) {
+    return;
+  }
+
+  if (unit.x !== state.cursor.x || unit.y !== state.cursor.y) {
+    return;
+  }
+
+  const tile = state.map.tiles[getTileIndex(unit.x, unit.y, state.map.width)];
+  if (!canSupply(unit, tile, unit.faction)) {
+    return;
+  }
+
+  const result = supply(unit, state.budgets[unit.faction], {
+    costFoodPer1: state.costFoodPer1,
+    costHpPer1: state.costHpPer1,
+  });
+  if (result.spent === 0) {
+    return;
+  }
+
+  state.budgets[unit.faction] = result.budget;
+  state.units[unitIndex] = result.unit;
+  state.units[unitIndex].acted = true;
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
@@ -436,11 +485,13 @@ export const hireUnit = (state: GameState, kingUnitId: number, unitType: UnitTyp
     y: spawn.y,
     movePoints: entry.movePoints,
     food: entry.food,
+    maxFood: entry.maxFood,
     acted: false,
     power: entry.power,
     defense: entry.defense,
     level: entry.level,
     hp: entry.hp,
+    maxHp: entry.maxHp,
   });
   state.nextUnitId += 1;
   if (state.hireConsumesAction) {
@@ -482,6 +533,61 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
       }
     }
   }
+};
+
+export const canSupply = (unit: Unit, tile: { type: TileType; ownerFaction?: FactionId | null }, faction: FactionId): boolean => {
+  if (unit.faction !== faction) {
+    return false;
+  }
+  if (tile.ownerFaction !== faction) {
+    return false;
+  }
+  return tile.type === TileType.Town || tile.type === TileType.Castle;
+};
+
+export const supply = (
+  unit: Unit,
+  factionBudget: number,
+  params: { costFoodPer1: number; costHpPer1: number },
+): { unit: Unit; budget: number; spent: number; recoveredFood: number; recoveredHp: number } => {
+  const foodNeeded = Math.max(0, unit.maxFood - unit.food);
+  const hpNeeded = Math.max(0, unit.maxHp - unit.hp);
+  if (foodNeeded === 0 && hpNeeded === 0) {
+    return { unit, budget: factionBudget, spent: 0, recoveredFood: 0, recoveredHp: 0 };
+  }
+
+  let budget = factionBudget;
+  let recoveredHp = 0;
+  let recoveredFood = 0;
+
+  if (params.costHpPer1 > 0) {
+    const maxHpAffordable = Math.floor(budget / params.costHpPer1);
+    recoveredHp = Math.min(hpNeeded, maxHpAffordable);
+    budget -= recoveredHp * params.costHpPer1;
+  }
+
+  if (params.costFoodPer1 > 0) {
+    const maxFoodAffordable = Math.floor(budget / params.costFoodPer1);
+    recoveredFood = Math.min(foodNeeded, maxFoodAffordable);
+    budget -= recoveredFood * params.costFoodPer1;
+  }
+
+  const spent = factionBudget - budget;
+  if (spent === 0) {
+    return { unit, budget: factionBudget, spent: 0, recoveredFood: 0, recoveredHp: 0 };
+  }
+
+  return {
+    unit: {
+      ...unit,
+      hp: Math.min(unit.maxHp, unit.hp + recoveredHp),
+      food: Math.min(unit.maxFood, unit.food + recoveredFood),
+    },
+    budget,
+    spent,
+    recoveredFood,
+    recoveredHp,
+  };
 };
 
 const isBlockedByZoc = (zoc: Set<number>, x: number, y: number, unit: Unit, width: number): boolean => {
