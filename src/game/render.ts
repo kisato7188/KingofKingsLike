@@ -114,7 +114,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 96;
+  const panelHeight = 112;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -144,7 +144,7 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillStyle = "#e7e7e7";
   ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
   if (selectedUnit) {
-    ctx.fillText(`Food: ${selectedUnit.food}`, x + 180, y + 68);
+    ctx.fillText(`Food: ${selectedUnit.food}`, x + 8, y + 88);
   }
 };
 
