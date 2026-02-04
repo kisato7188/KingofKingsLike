@@ -9,6 +9,7 @@ const HANDLED_KEYS = new Set([
   "Backspace",
   "KeyE",
   "KeyA",
+  "KeyO",
 ]);
 
 export class Input {

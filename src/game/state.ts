@@ -3,7 +3,7 @@ import { sampleScenario } from "../scenarios/sampleScenario";
 import { battle } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
 import { getTileIndex } from "./geometry";
-import { Faction, FactionId, Scenario, TileType, Unit } from "./types";
+import { Faction, FactionId, Scenario, TileType, Unit, UnitType } from "./types";
 
 export type GameState = {
   scenario: Scenario;
@@ -76,6 +76,10 @@ export const updateState = (state: GameState, input: Input): void => {
     } else {
       tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
     }
+  }
+
+  if (input.isPressed("KeyO")) {
+    tryOccupyAtCursor(state);
   }
 
   if (input.isPressed("KeyA")) {
@@ -180,6 +184,31 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   unit.x = targetX;
   unit.y = targetY;
   unit.food = Math.max(0, unit.food - steps);
+  unit.acted = true;
+  occupyIfPossible(state, unit);
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
+};
+
+const tryOccupyAtCursor = (state: GameState): void => {
+  if (state.selectedUnitId === null) {
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit || unit.acted) {
+    return;
+  }
+
+  if (unit.x !== state.cursor.x || unit.y !== state.cursor.y) {
+    return;
+  }
+
+  if (!occupyIfPossible(state, unit)) {
+    return;
+  }
+
   unit.acted = true;
   state.selectedUnitId = null;
   state.movementRange = null;
@@ -308,4 +337,29 @@ const getMoveCostForTile = (state: GameState, x: number, y: number): number => {
     default:
       return 1;
   }
+};
+
+export const canOccupy = (unit: Unit, tile: { type: TileType; ownerFaction?: FactionId | null }): boolean => {
+  if (tile.type !== TileType.Town && tile.type !== TileType.Castle) {
+    return false;
+  }
+
+  if (tile.ownerFaction === unit.faction) {
+    return false;
+  }
+
+  if (tile.type === TileType.Castle) {
+    return unit.type === UnitType.King;
+  }
+
+  return unit.type === UnitType.King || unit.type === UnitType.Fighter;
+};
+
+const occupyIfPossible = (state: GameState, unit: Unit): boolean => {
+  const tile = state.map.tiles[getTileIndex(unit.x, unit.y, state.map.width)];
+  if (!canOccupy(unit, tile)) {
+    return false;
+  }
+  tile.ownerFaction = unit.faction;
+  return true;
 };

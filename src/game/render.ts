@@ -1,4 +1,4 @@
-import { GameState, getEnemyZocTiles } from "./state";
+import { GameState, canOccupy, getEnemyZocTiles } from "./state";
 import { HUD_HEIGHT, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
@@ -127,7 +127,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 128;
+  const panelHeight = 144;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -161,6 +161,9 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     if (hasAdjacentEnemy(state, selectedUnit)) {
       ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 108);
     }
+    if (canOccupyHere(state, selectedUnit)) {
+      ctx.fillText("Command: Occupy (O)", x + 8, y + 128);
+    }
   }
 };
 
@@ -185,6 +188,14 @@ const getTileColor = (type: TileType): string => {
 
 const getFactionColor = (state: GameState, factionId: FactionId): string => {
   return state.factions.find((faction) => faction.id === factionId)?.color ?? "#ffffff";
+};
+
+const canOccupyHere = (state: GameState, unit: Unit): boolean => {
+  if (unit.x !== state.cursor.x || unit.y !== state.cursor.y || unit.acted) {
+    return false;
+  }
+  const tile = state.map.tiles[getTileIndex(unit.x, unit.y, state.map.width)];
+  return canOccupy(unit, tile);
 };
 
 const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {
