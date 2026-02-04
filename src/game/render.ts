@@ -166,6 +166,7 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
   const faction = state.factions[state.turn.factionIndex];
   const hoveredUnit = state.units.find((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
+  const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
 
   let lineY = y + 8;
   const lineHeight = 18;
@@ -178,6 +179,8 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
   ctx.fillText(faction.name, x + 72, lineY);
   ctx.fillStyle = "#e7e7e7";
+  lineY += lineHeight;
+  ctx.fillText(`Ctrl: ${controller} (1-4)`, x + 8, lineY);
   lineY += lineHeight;
   ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, lineY);
   lineY += lineHeight;

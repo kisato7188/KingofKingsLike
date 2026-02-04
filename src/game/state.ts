@@ -1,4 +1,5 @@
 import { Input } from "./Input";
+import { GameConfig, createDefaultConfig } from "./config";
 import { sampleScenario } from "../scenarios/sampleScenario";
 import { battle, defaultBattleConfig, getExpMultiplier } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
@@ -9,6 +10,7 @@ import { Faction, FactionId, Scenario, TileType, Unit, UnitType } from "./types"
 
 export type GameState = {
   scenario: Scenario;
+  config: GameConfig;
   cursor: {
     x: number;
     y: number;
@@ -49,6 +51,7 @@ export const createInitialState = (): GameState => {
   const initialFaction = getFirstActiveFaction(scenario);
   const initialState: GameState = {
     scenario,
+    config: createDefaultConfig(),
     cursor: { x: 0, y: 0 },
     turn: {
       factionIndex: 0,
@@ -89,8 +92,13 @@ export const createInitialState = (): GameState => {
   return initialState;
 };
 
-export const updateState = (state: GameState, input: Input): void => {
+export const updateState = (state: GameState, input: Input, allowHumanActions = true): void => {
   state.magicError = null;
+  handleControllerToggle(state, input);
+
+  if (!allowHumanActions) {
+    return;
+  }
 
   if (state.hireMenuOpen) {
     handleHireMenuInput(state, input);
@@ -123,7 +131,7 @@ export const updateState = (state: GameState, input: Input): void => {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
       if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
         state.selectedUnitId = unit.id;
-        state.movementRange = unit.food > 0 ? calculateMovementRange(state, unit) : null;
+        state.movementRange = unit.food > 0 ? getMovementRange(state, unit) : null;
       }
     } else {
       tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
@@ -175,13 +183,13 @@ export const updateState = (state: GameState, input: Input): void => {
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
         : undefined;
-      state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+      state.movementRange = unit && unit.food > 0 ? getMovementRange(state, unit) : null;
     } else if (state.attackMode) {
       state.attackMode = false;
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
         : undefined;
-      state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+      state.movementRange = unit && unit.food > 0 ? getMovementRange(state, unit) : null;
     } else {
       state.selectedUnitId = null;
       state.movementRange = null;
@@ -205,7 +213,7 @@ const startTurn = (state: GameState): void => {
   console.debug(`Turn Start: ${factionName}`);
 };
 
-const endTurn = (state: GameState): void => {
+export const endTurn = (state: GameState): void => {
   const { nextIndex, nextFaction, wrapped } = getNextActiveFaction(state);
 
   state.turn.factionIndex = nextIndex;
@@ -229,7 +237,7 @@ const clamp = (value: number, min: number, max: number): number => {
   return Math.max(min, Math.min(max, value));
 };
 
-const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult => {
+export const getMovementRange = (state: GameState, unit: Unit): ReachableResult => {
   const enemyZoc = getEnemyZocTiles(state.units, unit.faction, state.map.width, state.map.height);
   return findReachableTiles({
     width: state.map.width,
@@ -277,13 +285,46 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   unit.y = targetY;
   unit.food = Math.max(0, unit.food - steps);
   unit.movedThisTurn = true;
-  unit.acted = true;
-  occupyIfPossible(state, unit);
+  const occupied = occupyIfPossible(state, unit);
+  if (occupied) {
+    unit.acted = true;
+  }
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
+};
+
+export const moveUnitTo = (state: GameState, unitId: number, targetX: number, targetY: number): boolean => {
+  const unit = state.units.find((entry) => entry.id === unitId);
+  if (!unit || unit.acted) {
+    return false;
+  }
+  if (isOccupied(state, targetX, targetY, unit.id)) {
+    return false;
+  }
+  const range = getMovementRange(state, unit);
+  const targetIndex = getTileIndex(targetX, targetY, state.map.width);
+  if (!range.reachable.has(targetIndex)) {
+    return false;
+  }
+  const steps = range.steps.get(targetIndex);
+  if (steps === undefined || steps <= 0 || steps > unit.food) {
+    return false;
+  }
+  if (unit.x === targetX && unit.y === targetY) {
+    return false;
+  }
+  unit.x = targetX;
+  unit.y = targetY;
+  unit.food = Math.max(0, unit.food - steps);
+  unit.movedThisTurn = true;
+  const occupied = occupyIfPossible(state, unit);
+  if (occupied) {
+    unit.acted = true;
+  }
+  return true;
 };
 
 const getFirstActiveFaction = (scenario: Scenario): FactionId => {
@@ -341,6 +382,18 @@ const tryOccupyAtCursor = (state: GameState): void => {
   state.attackMode = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
+};
+
+export const occupyUnit = (state: GameState, unitId: number): boolean => {
+  const unit = state.units.find((entry) => entry.id === unitId);
+  if (!unit || unit.acted) {
+    return false;
+  }
+  if (!occupyIfPossible(state, unit)) {
+    return false;
+  }
+  unit.acted = true;
+  return true;
 };
 
 const trySupplyAtCursor = (state: GameState): void => {
@@ -408,6 +461,34 @@ const tryAttackAtCursor = (state: GameState): void => {
     return;
   }
 
+  resolveBattle(state, attackerIndex, defenderIndex);
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
+  state.hireMenuOpen = false;
+  state.magicMode = false;
+};
+
+export const attackUnit = (state: GameState, attackerId: number, defenderId: number): boolean => {
+  const attackerIndex = state.units.findIndex((entry) => entry.id === attackerId);
+  const defenderIndex = state.units.findIndex((entry) => entry.id === defenderId);
+  if (attackerIndex === -1 || defenderIndex === -1) {
+    return false;
+  }
+  const attacker = state.units[attackerIndex];
+  const defender = state.units[defenderIndex];
+  if (attacker.acted || attacker.faction === defender.faction) {
+    return false;
+  }
+  if (!isAdjacent(attacker.x, attacker.y, defender.x, defender.y)) {
+    return false;
+  }
+  resolveBattle(state, attackerIndex, defenderIndex);
+  return true;
+};
+
+const resolveBattle = (state: GameState, attackerIndex: number, defenderIndex: number): void => {
+  const attacker = state.units[attackerIndex];
   const defender = state.units[defenderIndex];
   const result = battle(attacker, defender, state.map, {
     ...defaultBattleConfig,
@@ -611,7 +692,7 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
     const unit = state.selectedUnitId !== null
       ? state.units.find((entry) => entry.id === state.selectedUnitId)
       : undefined;
-    state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+    state.movementRange = unit && unit.food > 0 ? getMovementRange(state, unit) : null;
     return;
   }
 
@@ -623,6 +704,21 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
         state.hireMenuOpen = false;
         state.movementRange = null;
       }
+    }
+  }
+};
+
+const handleControllerToggle = (state: GameState, input: Input): void => {
+  const mapping: Array<[string, FactionId]> = [
+    ["Digit1", FactionId.Blue],
+    ["Digit2", FactionId.Red],
+    ["Digit3", FactionId.Yellow],
+    ["Digit4", FactionId.Green],
+  ];
+  for (const [code, factionId] of mapping) {
+    if (input.isPressed(code)) {
+      const current = state.config.controllers[factionId];
+      state.config.controllers[factionId] = current === "Human" ? "CPU" : "Human";
     }
   }
 };
@@ -881,7 +977,7 @@ export const canOccupy = (unit: Unit, tile: { type: TileType; ownerFaction?: Fac
     return unit.type === UnitType.King;
   }
 
-  return unit.type === UnitType.King || unit.type === UnitType.Fighter;
+  return unit.type === UnitType.King || unit.type === UnitType.Fighter || unit.type === UnitType.Wizard;
 };
 
 const occupyIfPossible = (state: GameState, unit: Unit): boolean => {

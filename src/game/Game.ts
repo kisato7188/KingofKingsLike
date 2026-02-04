@@ -2,6 +2,7 @@ import { Input } from "./Input";
 import { getViewportHeight, getViewportWidth } from "./geometry";
 import { render } from "./render";
 import { createInitialState, updateState, GameState } from "./state";
+import { runCpuTurn } from "./ai/cpuController";
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -40,7 +41,16 @@ export class Game {
   };
 
   private update(_delta: number): void {
-    updateState(this.state, this.input);
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller === "CPU") {
+      updateState(this.state, this.input, false);
+      const updated = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+      if (updated === "CPU") {
+        runCpuTurn(this.state);
+      }
+    } else {
+      updateState(this.state, this.input, true);
+    }
     this.input.endFrame();
   }
 
