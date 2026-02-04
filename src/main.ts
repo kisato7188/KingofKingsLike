@@ -11,6 +11,11 @@ const game = new Game(canvas);
 
 game.start();
 
+const turnEndButton = document.getElementById("turn-end-button") as HTMLButtonElement | null;
+turnEndButton?.addEventListener("click", () => {
+  game.requestEndTurn();
+});
+
 const bgm = new Audio("/bgm.mp3");
 bgm.loop = true;
 bgm.volume = 0.5;

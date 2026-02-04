@@ -66,3 +66,21 @@ body {
   min-width: 120px;
   color: rgba(231, 231, 231, 0.7);
 }
+
+#turn-end-button {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(34, 40, 54, 0.9);
+  color: #e7e7e7;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 20;
+}
+
+#turn-end-button:hover {
+  background: rgba(52, 58, 75, 0.95);
+}

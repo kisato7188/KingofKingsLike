@@ -9,6 +9,7 @@ import {
   canHireUnitType,
   clearSelection,
   createInitialState,
+  endTurn,
   getActionMenuOptions,
   handleTileClick,
   openContextMenu,
@@ -45,6 +46,15 @@ export class Game {
 
   start(): void {
     requestAnimationFrame(this.loop);
+  }
+
+  requestEndTurn(): void {
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller !== "Human") {
+      return;
+    }
+    clearSelection(this.state);
+    endTurn(this.state);
   }
 
   private loop = (time: number): void => {
