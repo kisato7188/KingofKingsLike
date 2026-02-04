@@ -22,6 +22,10 @@ export type GameState = {
   selectedUnitId: number | null;
   movementRange: ReachableResult | null;
   attackMode: boolean;
+  budgets: Record<FactionId, number>;
+  baseIncome: number;
+  incomePerTown: number;
+  incomePerCastle: number;
 };
 
 export const createInitialState = (): GameState => {
@@ -41,6 +45,15 @@ export const createInitialState = (): GameState => {
     selectedUnitId: null,
     movementRange: null,
     attackMode: false,
+    budgets: {
+      [FactionId.Blue]: 0,
+      [FactionId.Red]: 0,
+      [FactionId.Yellow]: 0,
+      [FactionId.Green]: 0,
+    },
+    baseIncome: 100,
+    incomePerTown: 20,
+    incomePerCastle: 50,
   };
   startTurn(initialState);
   return initialState;
@@ -109,6 +122,11 @@ const startTurn = (state: GameState): void => {
       unit.acted = false;
     }
   }
+  const income = calcIncome(state.turn.currentFaction, state.map, state.baseIncome, state.incomePerTown, state.incomePerCastle);
+  state.budgets[state.turn.currentFaction] += income.total;
+  console.log(
+    `Income: base ${income.base} + towns ${income.towns}*${state.incomePerTown} + castles ${income.castles}*${state.incomePerCastle} = ${income.total}`,
+  );
   const factionName = state.factions.find((faction) => faction.id === state.turn.currentFaction)?.name ?? "Unknown";
   console.debug(`Turn Start: ${factionName}`);
 };
@@ -337,6 +355,31 @@ const getMoveCostForTile = (state: GameState, x: number, y: number): number => {
     default:
       return 1;
   }
+};
+
+export const calcIncome = (
+  faction: FactionId,
+  map: Scenario["map"],
+  baseIncome: number,
+  incomePerTown: number,
+  incomePerCastle: number,
+): { total: number; base: number; towns: number; castles: number } => {
+  let towns = 0;
+  let castles = 0;
+  for (const tile of map.tiles) {
+    if (tile.ownerFaction !== faction) {
+      continue;
+    }
+    if (tile.type === TileType.Town) {
+      towns += 1;
+    }
+    if (tile.type === TileType.Castle) {
+      castles += 1;
+    }
+  }
+
+  const total = baseIncome + towns * incomePerTown + castles * incomePerCastle;
+  return { total, base: baseIncome, towns, castles };
 };
 
 export const canOccupy = (unit: Unit, tile: { type: TileType; ownerFaction?: FactionId | null }): boolean => {

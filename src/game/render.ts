@@ -127,7 +127,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 144;
+  const panelHeight = 160;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -165,6 +165,7 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
       ctx.fillText("Command: Occupy (O)", x + 8, y + 128);
     }
   }
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 148);
 };
 
 const getTileColor = (type: TileType): string => {
