@@ -1,0 +1,50 @@
+import { Input } from "./Input";
+import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "./constants";
+import { render } from "./render";
+import { createInitialState, updateState, GameState } from "./state";
+
+export class Game {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly input: Input;
+  private state: GameState;
+  private lastTime = 0;
+
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.canvas.width = VIEWPORT_WIDTH;
+    this.canvas.height = VIEWPORT_HEIGHT;
+
+    const ctx = this.canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("2D context not supported");
+    }
+
+    this.ctx = ctx;
+    this.input = new Input(window);
+    this.state = createInitialState();
+  }
+
+  start(): void {
+    requestAnimationFrame(this.loop);
+  }
+
+  private loop = (time: number): void => {
+    const delta = (time - this.lastTime) / 1000;
+    this.lastTime = time;
+
+    this.update(delta);
+    this.render();
+
+    requestAnimationFrame(this.loop);
+  };
+
+  private update(_delta: number): void {
+    updateState(this.state, this.input);
+    this.input.endFrame();
+  }
+
+  private render(): void {
+    render(this.ctx, this.state);
+  }
+}

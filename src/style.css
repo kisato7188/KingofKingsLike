@@ -1,0 +1,34 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background-color: #0f1116;
+  color: #e7e7e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game-canvas {
+  width: 640px;
+  height: 480px;
+  image-rendering: pixelated;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #1b1f2a;
+}
