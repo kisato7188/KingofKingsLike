@@ -4,6 +4,7 @@ export type UnitCatalogEntry = {
   type: UnitType;
   name: string;
   hireCost: number;
+  isCaster: boolean;
   movePoints: number;
   food: number;
   maxFood: number;
@@ -12,6 +13,8 @@ export type UnitCatalogEntry = {
   level: number;
   hp: number;
   maxHp: number;
+  promotesTo?: UnitType;
+  promoteAtCrown?: boolean;
 };
 
 export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
@@ -19,6 +22,7 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     type: UnitType.Fighter,
     name: "Fighter",
     hireCost: 60,
+    isCaster: false,
     movePoints: 3,
     food: 25,
     maxFood: 25,
@@ -27,11 +31,14 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     level: 1,
     hp: 14,
     maxHp: 14,
+    promotesTo: UnitType.Knight,
+    promoteAtCrown: true,
   },
   [UnitType.Archer]: {
     type: UnitType.Archer,
     name: "Archer",
     hireCost: 70,
+    isCaster: false,
     movePoints: 3,
     food: 20,
     maxFood: 20,
@@ -45,6 +52,7 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     type: UnitType.Knight,
     name: "Knight",
     hireCost: 120,
+    isCaster: false,
     movePoints: 4,
     food: 30,
     maxFood: 30,
@@ -58,6 +66,7 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     type: UnitType.Mage,
     name: "Mage",
     hireCost: 90,
+    isCaster: true,
     movePoints: 3,
     food: 22,
     maxFood: 22,
@@ -71,6 +80,7 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     type: UnitType.King,
     name: "King",
     hireCost: 0,
+    isCaster: false,
     movePoints: 4,
     food: 50,
     maxFood: 50,

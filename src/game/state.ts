@@ -4,6 +4,7 @@ import { battle, defaultBattleConfig, getExpMultiplier } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
 import { getTileIndex } from "./geometry";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
+import { Spell, spells } from "./spells";
 import { Faction, FactionId, Scenario, TileType, Unit, UnitType } from "./types";
 
 export type GameState = {
@@ -26,6 +27,9 @@ export type GameState = {
   hireMenuOpen: boolean;
   hireSelectionIndex: number;
   hireConsumesAction: boolean;
+  magicMode: boolean;
+  magicSpellIndex: number;
+  magicError: string | null;
   nextUnitId: number;
   costFoodPer1: number;
   costHpPer1: number;
@@ -60,6 +64,9 @@ export const createInitialState = (): GameState => {
     hireMenuOpen: false,
     hireSelectionIndex: 0,
     hireConsumesAction: false,
+    magicMode: false,
+    magicSpellIndex: 0,
+    magicError: null,
     nextUnitId: Math.max(0, ...scenario.units.map((unit) => unit.id)) + 1,
     costFoodPer1: 2,
     costHpPer1: 5,
@@ -83,6 +90,8 @@ export const createInitialState = (): GameState => {
 };
 
 export const updateState = (state: GameState, input: Input): void => {
+  state.magicError = null;
+
   if (state.hireMenuOpen) {
     handleHireMenuInput(state, input);
     return;
@@ -106,7 +115,9 @@ export const updateState = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
-    if (state.attackMode) {
+    if (state.magicMode) {
+      tryCastSpellAtCursor(state);
+    } else if (state.attackMode) {
       tryAttackAtCursor(state);
     } else if (state.selectedUnitId === null) {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
@@ -125,6 +136,22 @@ export const updateState = (state: GameState, input: Input): void => {
 
   if (input.isPressed("KeyS")) {
     trySupplyAtCursor(state);
+  }
+
+  if (input.isPressed("KeyM")) {
+    const unit = state.selectedUnitId !== null
+      ? state.units.find((entry) => entry.id === state.selectedUnitId)
+      : undefined;
+    if (unit && isCaster(unit)) {
+      if (unit.movedThisTurn) {
+        state.magicError = "Magic requires no movement";
+      } else {
+        state.magicMode = true;
+        state.movementRange = null;
+        state.attackMode = false;
+        state.hireMenuOpen = false;
+      }
+    }
   }
 
   if (input.isPressed("KeyH")) {
@@ -147,7 +174,13 @@ export const updateState = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Escape") || input.isPressed("Backspace")) {
-    if (state.attackMode) {
+    if (state.magicMode) {
+      state.magicMode = false;
+      const unit = state.selectedUnitId !== null
+        ? state.units.find((entry) => entry.id === state.selectedUnitId)
+        : undefined;
+      state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+    } else if (state.attackMode) {
       state.attackMode = false;
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
@@ -164,6 +197,7 @@ const startTurn = (state: GameState): void => {
   for (const unit of state.units) {
     if (unit.faction === state.turn.currentFaction) {
       unit.acted = false;
+      unit.movedThisTurn = false;
     }
   }
   const income = calcIncome(state.turn.currentFaction, state.map, state.baseIncome, state.incomePerTown, state.incomePerCastle);
@@ -189,6 +223,7 @@ const endTurn = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
+  state.magicMode = false;
   startTurn(state);
 };
 
@@ -247,12 +282,14 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   unit.x = targetX;
   unit.y = targetY;
   unit.food = Math.max(0, unit.food - steps);
+  unit.movedThisTurn = true;
   unit.acted = true;
   occupyIfPossible(state, unit);
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
+  state.magicMode = false;
 };
 
 const tryOccupyAtCursor = (state: GameState): void => {
@@ -278,6 +315,7 @@ const tryOccupyAtCursor = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
+  state.magicMode = false;
 };
 
 const trySupplyAtCursor = (state: GameState): void => {
@@ -319,6 +357,7 @@ const trySupplyAtCursor = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
+  state.magicMode = false;
 };
 
 const tryAttackAtCursor = (state: GameState): void => {
@@ -386,6 +425,7 @@ const tryAttackAtCursor = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
+  state.magicMode = false;
 };
 
 const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
@@ -510,6 +550,7 @@ export const hireUnit = (state: GameState, kingUnitId: number, unitType: UnitTyp
     movePoints: entry.movePoints,
     food: entry.food,
     maxFood: entry.maxFood,
+    movedThisTurn: false,
     acted: false,
     power: entry.power,
     defense: entry.defense,
@@ -561,6 +602,79 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
   }
 };
 
+const isCaster = (unit: Unit): boolean => {
+  return unitCatalog[unit.type]?.isCaster ?? false;
+};
+
+const getSelectedSpell = (state: GameState): Spell | null => {
+  return spells[state.magicSpellIndex] ?? null;
+};
+
+const tryCastSpellAtCursor = (state: GameState): void => {
+  if (state.selectedUnitId === null) {
+    return;
+  }
+
+  const casterIndex = state.units.findIndex((unit) => unit.id === state.selectedUnitId);
+  if (casterIndex === -1) {
+    return;
+  }
+
+  const caster = state.units[casterIndex];
+  if (!isCaster(caster) || caster.movedThisTurn) {
+    return;
+  }
+
+  const spell = getSelectedSpell(state);
+  if (!spell) {
+    return;
+  }
+
+  const targetIndex = state.units.findIndex((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
+  if (targetIndex === -1) {
+    return;
+  }
+
+  const target = state.units[targetIndex];
+  if (!isValidSpellTarget(caster, target, spell)) {
+    return;
+  }
+
+  const updatedTarget = spell.effect(caster, target);
+  state.units[targetIndex] = updatedTarget;
+  state.units[casterIndex].acted = true;
+  console.log(`${caster.type} casts ${spell.name} on ${target.type}`);
+
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
+  state.hireMenuOpen = false;
+  state.magicMode = false;
+};
+
+const isValidSpellTarget = (caster: Unit, target: Unit, spell: Spell): boolean => {
+  if (!isInRange(caster, target, spell.range)) {
+    return false;
+  }
+
+  if (spell.targetType === "self") {
+    return caster.id === target.id;
+  }
+  if (spell.targetType === "ally") {
+    return caster.faction === target.faction;
+  }
+  if (spell.targetType === "enemy") {
+    return caster.faction !== target.faction;
+  }
+  return false;
+};
+
+const isInRange = (caster: Unit, target: Unit, range: number): boolean => {
+  const dx = Math.abs(caster.x - target.x);
+  const dy = Math.abs(caster.y - target.y);
+  return dx + dy <= range;
+};
+
 const calcExpGain = (state: GameState, winner: Unit, defeated: Unit): number => {
   const multiplier = getExpMultiplier(winner.type, defeated.type, state.expAffinity);
   return Math.round(state.baseExpPerKill * multiplier);
@@ -575,6 +689,7 @@ const applyExperience = (state: GameState, unitId: number, expGain: number): voi
   const unit = state.units[unitIndex];
   const beforeLevel = unit.level;
   const beforeCrown = unit.crown;
+  const beforeType = unit.type;
   let exp = unit.exp + expGain;
   let level = unit.level;
   let crown = unit.crown;
@@ -587,18 +702,41 @@ const applyExperience = (state: GameState, unitId: number, expGain: number): voi
     crown = true;
   }
 
-  state.units[unitIndex] = {
+  let updated: Unit = {
     ...unit,
     exp,
     level,
     crown,
   };
 
+  if (!beforeCrown && crown) {
+    const catalog = unitCatalog[unit.type];
+    if (catalog?.promotesTo && catalog.promoteAtCrown) {
+      const promoted = unitCatalog[catalog.promotesTo];
+      if (promoted) {
+        updated = {
+          ...updated,
+          type: promoted.type,
+          movePoints: promoted.movePoints,
+          maxFood: promoted.maxFood,
+          maxHp: promoted.maxHp,
+          power: promoted.power,
+          defense: promoted.defense,
+          food: Math.min(updated.food, promoted.maxFood),
+          hp: Math.min(updated.hp, promoted.maxHp),
+        };
+        console.log(`Class Change: ${beforeType} -> ${promoted.type}`);
+      }
+    }
+  }
+
+  state.units[unitIndex] = updated;
+
   if (expGain > 0) {
     console.log(`${unit.type} gains ${expGain} exp`);
   }
   if (beforeLevel !== level || beforeCrown !== crown) {
-    console.log(`${unit.type} level up to ${crown ? "Crown" : `Lv${level}`}`);
+    console.log(`${updated.type} level up to ${crown ? "Crown" : `Lv${level}`}`);
   }
 };
 

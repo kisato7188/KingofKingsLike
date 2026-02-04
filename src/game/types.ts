@@ -42,6 +42,7 @@ export type Unit = {
   movePoints: number;
   food: number;
   maxFood: number;
+  movedThisTurn: boolean;
   acted: boolean;
   power: number;
   defense: number;

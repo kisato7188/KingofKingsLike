@@ -135,7 +135,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 248;
+    const panelHeight = 280;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -181,6 +181,14 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     if (canSupplyHere(state, selectedUnit)) {
       ctx.fillText("Command: Supply (S)", x + 8, y + 228);
     }
+    if (canMagicHere(state, selectedUnit)) {
+      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + 8, y + 248);
+    } else if (isCaster(selectedUnit) && selectedUnit.movedThisTurn) {
+      ctx.fillText("Magic: unavailable after move", x + 8, y + 248);
+    }
+      if (state.magicError) {
+        ctx.fillText(state.magicError, x + 8, y + 268);
+      }
   }
 };
 
@@ -244,6 +252,13 @@ const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {
     return dx <= 1 && dy <= 1 && (dx + dy) > 0;
   });
 };
+  const canMagicHere = (state: GameState, unit: Unit): boolean => {
+    return isCaster(unit) && !unit.movedThisTurn;
+  };
+
+  const isCaster = (unit: Unit): boolean => {
+    return unitCatalog[unit.type]?.isCaster ?? false;
+  };
 
 const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   if (!state.hireMenuOpen || state.selectedUnitId === null) {

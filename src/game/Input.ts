@@ -12,6 +12,7 @@ const HANDLED_KEYS = new Set([
   "KeyO",
   "KeyH",
   "KeyS",
+  "KeyM",
 ]);
 
 export class Input {
