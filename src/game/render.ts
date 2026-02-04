@@ -99,10 +99,10 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillStyle = "rgba(15, 17, 22, 0.8)";
-  ctx.fillRect(8, 8, 260, 80);
+  ctx.fillRect(8, 8, 320, 96);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.strokeRect(8, 8, 260, 80);
+  ctx.strokeRect(8, 8, 320, 96);
 
   ctx.fillStyle = "#e7e7e7";
   ctx.font = "14px 'Noto Sans JP', sans-serif";
