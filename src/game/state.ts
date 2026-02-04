@@ -1,5 +1,6 @@
 import { Input } from "./Input";
 import { sampleScenario } from "../scenarios/sampleScenario";
+import { battle } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
 import { getTileIndex } from "./geometry";
 import { Faction, FactionId, Scenario, TileType, Unit } from "./types";
@@ -20,6 +21,7 @@ export type GameState = {
   units: Unit[];
   selectedUnitId: number | null;
   movementRange: ReachableResult | null;
+  attackMode: boolean;
 };
 
 export const createInitialState = (): GameState => {
@@ -38,6 +40,7 @@ export const createInitialState = (): GameState => {
     units: scenario.units,
     selectedUnitId: null,
     movementRange: null,
+    attackMode: false,
   };
   startTurn(initialState);
   return initialState;
@@ -62,7 +65,9 @@ export const updateState = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
-    if (state.selectedUnitId === null) {
+    if (state.attackMode) {
+      tryAttackAtCursor(state);
+    } else if (state.selectedUnitId === null) {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
       if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
         state.selectedUnitId = unit.id;
@@ -73,9 +78,24 @@ export const updateState = (state: GameState, input: Input): void => {
     }
   }
 
+  if (input.isPressed("KeyA")) {
+    if (state.selectedUnitId !== null && hasAdjacentEnemy(state, state.selectedUnitId)) {
+      state.attackMode = true;
+      state.movementRange = null;
+    }
+  }
+
   if (input.isPressed("Escape") || input.isPressed("Backspace")) {
-    state.selectedUnitId = null;
-    state.movementRange = null;
+    if (state.attackMode) {
+      state.attackMode = false;
+      const unit = state.selectedUnitId !== null
+        ? state.units.find((entry) => entry.id === state.selectedUnitId)
+        : undefined;
+      state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+    } else {
+      state.selectedUnitId = null;
+      state.movementRange = null;
+    }
   }
 };
 
@@ -101,6 +121,7 @@ const endTurn = (state: GameState): void => {
   }
   state.selectedUnitId = null;
   state.movementRange = null;
+  state.attackMode = false;
   startTurn(state);
 };
 
@@ -162,10 +183,79 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   unit.acted = true;
   state.selectedUnitId = null;
   state.movementRange = null;
+  state.attackMode = false;
+};
+
+const tryAttackAtCursor = (state: GameState): void => {
+  if (state.selectedUnitId === null) {
+    return;
+  }
+
+  const attackerIndex = state.units.findIndex((entry) => entry.id === state.selectedUnitId);
+  if (attackerIndex === -1) {
+    return;
+  }
+
+  const attacker = state.units[attackerIndex];
+  const defenderIndex = state.units.findIndex((unit) =>
+    unit.id !== attacker.id &&
+    unit.faction !== attacker.faction &&
+    unit.x === state.cursor.x &&
+    unit.y === state.cursor.y &&
+    isAdjacent(attacker.x, attacker.y, unit.x, unit.y),
+  );
+
+  if (defenderIndex === -1) {
+    return;
+  }
+
+  const defender = state.units[defenderIndex];
+  const result = battle(attacker, defender, state.map);
+  for (const line of result.log) {
+    console.log(line);
+  }
+
+  if (result.attackerDefeated) {
+    state.units.splice(attackerIndex, 1);
+  } else {
+    state.units[attackerIndex] = { ...result.attacker, acted: true };
+  }
+
+  if (result.defenderDefeated) {
+    const currentIndex = state.units.findIndex((unit) => unit.id === defender.id);
+    if (currentIndex !== -1) {
+      state.units.splice(currentIndex, 1);
+    }
+  } else {
+    const currentIndex = state.units.findIndex((unit) => unit.id === defender.id);
+    if (currentIndex !== -1) {
+      state.units[currentIndex] = result.defender;
+    }
+  }
+
+  state.selectedUnitId = null;
+  state.movementRange = null;
+  state.attackMode = false;
 };
 
 const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
   return state.units.some((unit) => unit.id !== ignoreId && unit.x === x && unit.y === y);
+};
+
+const hasAdjacentEnemy = (state: GameState, unitId: number): boolean => {
+  const unit = state.units.find((entry) => entry.id === unitId);
+  if (!unit) {
+    return false;
+  }
+  return state.units.some((other) =>
+    other.faction !== unit.faction && isAdjacent(unit.x, unit.y, other.x, other.y),
+  );
+};
+
+const isAdjacent = (ax: number, ay: number, bx: number, by: number): boolean => {
+  const dx = Math.abs(ax - bx);
+  const dy = Math.abs(ay - by);
+  return dx <= 1 && dy <= 1 && (dx + dy) > 0;
 };
 
 export const getEnemyZocTiles = (
