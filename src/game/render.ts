@@ -1,4 +1,12 @@
-import { GameState, canHireAtCastle, canHireUnitType, canOccupy, canSupply, getActionMenuOptions, getEnemyZocTiles } from "./state";
+import {
+  GameState,
+  canHireAtCastle,
+  canHireUnitType,
+  canOccupy,
+  canSupply,
+  getActionMenuOptions,
+  getEnemyZocTiles,
+} from "./state";
 import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
@@ -18,6 +26,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   drawCursor(ctx, state);
   drawDebug(ctx, state);
   drawActionMenu(ctx, state);
+  drawContextMenu(ctx, state);
   drawHireMenu(ctx, state);
 };
 
@@ -148,7 +157,7 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
-  if (state.actionMenuOpen || state.hireMenuOpen) {
+  if (state.actionMenuOpen || state.hireMenuOpen || state.contextMenuOpen) {
     return;
   }
   const { x, y } = boardToCanvas(state.cursor.x, state.cursor.y);
@@ -205,6 +214,39 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
     ctx.fillStyle = "#e7e7e7";
     ctx.fillText(option.label, menuX + 10, y);
   });
+};
+
+const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.contextMenuOpen) {
+    return;
+  }
+
+  const { x: cursorX, y: cursorY } = boardToCanvas(state.cursor.x, state.cursor.y);
+  const menuWidth = 140;
+  const rowHeight = 22;
+  const menuHeight = 16 + rowHeight;
+  const mapWidthPx = state.map.width * TILE_SIZE;
+  const mapHeightPx = state.map.height * TILE_SIZE;
+  const maxX = mapWidthPx - menuWidth - 8;
+  const maxY = mapHeightPx - menuHeight - 8;
+  const menuX = Math.max(8, Math.min(cursorX + TILE_SIZE + 6, maxX));
+  const menuY = Math.max(8, Math.min(cursorY - 6, maxY));
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.92)";
+  ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+
+  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.textBaseline = "top";
+
+  const rowY = menuY + 8;
+  if (state.contextMenuIndex === 0) {
+    ctx.fillStyle = "rgba(88, 160, 255, 0.25)";
+    ctx.fillRect(menuX + 4, rowY - 2, menuWidth - 8, rowHeight);
+  }
+  ctx.fillStyle = "#e7e7e7";
+  ctx.fillText("ターン終了", menuX + 10, rowY);
 };
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {

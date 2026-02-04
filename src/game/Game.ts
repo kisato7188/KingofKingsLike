@@ -4,13 +4,14 @@ import { render } from "./render";
 import { TILE_SIZE } from "./constants";
 import {
   applyActionMenuSelection,
+  applyContextMenuSelection,
   applyHireMenuSelection,
   canHireUnitType,
   clearSelection,
   createInitialState,
-  endTurn,
   getActionMenuOptions,
   handleTileClick,
+  openContextMenu,
   updateState,
   GameState,
 } from "./state";
@@ -109,6 +110,10 @@ export class Game {
       return;
     }
 
+    if (this.state.contextMenuOpen && this.handleContextMenuClick(local.x, local.y)) {
+      return;
+    }
+
     const position = this.getTilePositionFromLocal(local.x, local.y);
     if (!position) {
       return;
@@ -124,8 +129,16 @@ export class Game {
     if (controller !== "Human") {
       return;
     }
+    const local = this.getLocalPosition(event);
+    if (local) {
+      const position = this.getTilePositionFromLocal(local.x, local.y);
+      if (position) {
+        this.state.cursor.x = position.x;
+        this.state.cursor.y = position.y;
+      }
+    }
     clearSelection(this.state);
-    endTurn(this.state);
+    openContextMenu(this.state);
   };
 
   private getLocalPosition(event: MouseEvent): { x: number; y: number } | null {
@@ -235,6 +248,36 @@ export class Game {
     }
 
     applyHireMenuSelection(this.state, index);
+    return true;
+  }
+
+  private handleContextMenuClick(localX: number, localY: number): boolean {
+    if (!this.state.contextMenuOpen) {
+      return false;
+    }
+
+    const cursorX = this.state.cursor.x * TILE_SIZE;
+    const cursorY = this.state.cursor.y * TILE_SIZE;
+    const menuWidth = 140;
+    const rowHeight = 22;
+    const menuHeight = 16 + rowHeight;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const maxX = mapWidthPx - menuWidth - 8;
+    const maxY = mapHeightPx - menuHeight - 8;
+    const menuX = this.clamp(cursorX + TILE_SIZE + 6, 8, maxX);
+    const menuY = this.clamp(cursorY - 6, 8, maxY);
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return false;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY < itemTop || localY > itemTop + rowHeight) {
+      return true;
+    }
+
+    applyContextMenuSelection(this.state, 0);
     return true;
   }
 

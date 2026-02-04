@@ -28,6 +28,8 @@ export type GameState = {
   attackMode: boolean;
   actionMenuOpen: boolean;
   actionMenuIndex: number;
+  contextMenuOpen: boolean;
+  contextMenuIndex: number;
   hireMenuOpen: boolean;
   hireSelectionIndex: number;
   hireConsumesAction: boolean;
@@ -68,6 +70,8 @@ export const createInitialState = (): GameState => {
     attackMode: false,
     actionMenuOpen: false,
     actionMenuIndex: 0,
+    contextMenuOpen: false,
+    contextMenuIndex: 0,
     hireMenuOpen: false,
     hireSelectionIndex: 0,
     hireConsumesAction: false,
@@ -111,6 +115,10 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
 
   if (state.actionMenuOpen) {
     handleActionMenuInput(state, input);
+    return;
+  }
+
+  if (state.contextMenuOpen) {
     return;
   }
 
@@ -219,6 +227,10 @@ export const handleTileClick = (state: GameState, x: number, y: number): void =>
     return;
   }
 
+  if (state.contextMenuOpen) {
+    return;
+  }
+
   if (state.magicMode) {
     tryCastSpellAtCursor(state);
     return;
@@ -245,6 +257,7 @@ export const clearSelection = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.actionMenuOpen = false;
+  state.contextMenuOpen = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
 };
@@ -277,6 +290,7 @@ export const endTurn = (state: GameState): void => {
   state.movementRange = null;
   state.attackMode = false;
   state.actionMenuOpen = false;
+  state.contextMenuOpen = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
   startTurn(state);
@@ -899,6 +913,27 @@ export const applyActionMenuSelection = (state: GameState, index: number): void 
     default:
       break;
   }
+};
+
+export const openContextMenu = (state: GameState): void => {
+  state.contextMenuOpen = true;
+  state.contextMenuIndex = 0;
+  state.actionMenuOpen = false;
+  state.hireMenuOpen = false;
+  state.magicMode = false;
+  state.attackMode = false;
+  state.movementRange = null;
+};
+
+export const applyContextMenuSelection = (state: GameState, index: number): void => {
+  if (!state.contextMenuOpen) {
+    return;
+  }
+  if (index !== 0) {
+    return;
+  }
+  state.contextMenuOpen = false;
+  endTurn(state);
 };
 
 const handleControllerToggle = (state: GameState, input: Input): void => {
