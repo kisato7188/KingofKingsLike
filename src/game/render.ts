@@ -1,5 +1,12 @@
 import { GameState } from "./state";
-import { GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "./constants";
+import {
+  GRID_HEIGHT,
+  GRID_WIDTH,
+  HUD_HEIGHT,
+  TILE_SIZE,
+  VIEWPORT_HEIGHT,
+  VIEWPORT_WIDTH,
+} from "./constants";
 
 export const render = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
@@ -13,19 +20,21 @@ const drawGrid = (ctx: CanvasRenderingContext2D): void => {
   ctx.fillStyle = "#1b1f2a";
   ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
+  const originY = HUD_HEIGHT;
+
   ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
   ctx.lineWidth = 1;
 
   for (let x = 0; x <= GRID_WIDTH; x += 1) {
     const px = x * TILE_SIZE;
     ctx.beginPath();
-    ctx.moveTo(px, 0);
-    ctx.lineTo(px, VIEWPORT_HEIGHT);
+    ctx.moveTo(px, originY);
+    ctx.lineTo(px, originY + GRID_HEIGHT * TILE_SIZE);
     ctx.stroke();
   }
 
   for (let y = 0; y <= GRID_HEIGHT; y += 1) {
-    const py = y * TILE_SIZE;
+    const py = originY + y * TILE_SIZE;
     ctx.beginPath();
     ctx.moveTo(0, py);
     ctx.lineTo(VIEWPORT_WIDTH, py);
@@ -35,7 +44,7 @@ const drawGrid = (ctx: CanvasRenderingContext2D): void => {
 
 const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const x = state.cursor.x * TILE_SIZE;
-  const y = state.cursor.y * TILE_SIZE;
+  const y = HUD_HEIGHT + state.cursor.y * TILE_SIZE;
 
   ctx.fillStyle = "rgba(255, 219, 88, 0.25)";
   ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
