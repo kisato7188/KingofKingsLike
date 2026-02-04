@@ -26,8 +26,8 @@ body {
 }
 
 #game-canvas {
-  width: 640px;
-  height: 576px;
+  width: auto;
+  height: auto;
   image-rendering: pixelated;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: #1b1f2a;

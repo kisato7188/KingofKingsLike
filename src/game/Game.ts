@@ -1,5 +1,5 @@
 import { Input } from "./Input";
-import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "./constants";
+import { getViewportHeight, getViewportWidth } from "./geometry";
 import { render } from "./render";
 import { createInitialState, updateState, GameState } from "./state";
 
@@ -12,8 +12,9 @@ export class Game {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.canvas.width = VIEWPORT_WIDTH;
-    this.canvas.height = VIEWPORT_HEIGHT;
+    this.state = createInitialState();
+    this.canvas.width = getViewportWidth(this.state.map);
+    this.canvas.height = getViewportHeight(this.state.map);
 
     const ctx = this.canvas.getContext("2d");
     if (!ctx) {
@@ -22,7 +23,6 @@ export class Game {
 
     this.ctx = ctx;
     this.input = new Input(window);
-    this.state = createInitialState();
   }
 
   start(): void {
