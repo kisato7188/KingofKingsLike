@@ -42,6 +42,14 @@ const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
         ctx.strokeStyle = ownerColor;
         ctx.lineWidth = 2;
         ctx.strokeRect(canvasX + 2, canvasY + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(canvasX + 6, canvasY + 6, TILE_SIZE - 12, 16);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px 'Noto Sans JP', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(tile.type === TileType.Castle ? "城" : "町", canvasX + TILE_SIZE / 2, canvasY + 6);
       }
     }
   }
