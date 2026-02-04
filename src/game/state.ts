@@ -46,7 +46,7 @@ export type GameState = {
 
 export const createInitialState = (): GameState => {
   const scenario = sampleScenario;
-  const initialFaction = scenario.factions[0]?.id ?? FactionId.Blue;
+  const initialFaction = getFirstActiveFaction(scenario);
   const initialState: GameState = {
     scenario,
     cursor: { x: 0, y: 0 },
@@ -206,9 +206,7 @@ const startTurn = (state: GameState): void => {
 };
 
 const endTurn = (state: GameState): void => {
-  const nextIndex = (state.turn.factionIndex + 1) % state.factions.length;
-  const nextFaction = state.factions[nextIndex]?.id ?? state.turn.currentFaction;
-  const wrapped = nextIndex === 0 && state.turn.factionIndex !== 0;
+  const { nextIndex, nextFaction, wrapped } = getNextActiveFaction(state);
 
   state.turn.factionIndex = nextIndex;
   state.turn.currentFaction = nextFaction;
@@ -286,6 +284,37 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   state.attackMode = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
+};
+
+const getFirstActiveFaction = (scenario: Scenario): FactionId => {
+  for (const faction of scenario.factions) {
+    if (scenario.units.some((unit) => unit.faction === faction.id)) {
+      return faction.id;
+    }
+  }
+  return scenario.factions[0]?.id ?? FactionId.Blue;
+};
+
+const getNextActiveFaction = (state: GameState): { nextIndex: number; nextFaction: FactionId; wrapped: boolean } => {
+  if (state.factions.length === 0) {
+    return { nextIndex: 0, nextFaction: state.turn.currentFaction, wrapped: false };
+  }
+
+  let index = state.turn.factionIndex;
+  let wrapped = false;
+
+  for (let i = 0; i < state.factions.length; i += 1) {
+    index = (index + 1) % state.factions.length;
+    if (index === 0) {
+      wrapped = true;
+    }
+    const factionId = state.factions[index]?.id;
+    if (factionId !== undefined && state.units.some((unit) => unit.faction === factionId)) {
+      return { nextIndex: index, nextFaction: factionId, wrapped };
+    }
+  }
+
+  return { nextIndex: state.turn.factionIndex, nextFaction: state.turn.currentFaction, wrapped: false };
 };
 
 const tryOccupyAtCursor = (state: GameState): void => {
