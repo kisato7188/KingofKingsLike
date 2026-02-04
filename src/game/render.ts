@@ -132,6 +132,17 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ctx.textAlign = "right";
     ctx.textBaseline = "bottom";
     ctx.fillText(`${unit.hp}/${unit.maxHp}`, canvasX + TILE_SIZE - 4, canvasY + TILE_SIZE - 4);
+
+    const movePossible = !unit.acted && !unit.movedThisTurn && unit.food > 0;
+    const actionPossible = !unit.acted;
+    const actionLabel = `${movePossible ? "M" : ""}${actionPossible ? "A" : ""}`;
+    if (actionLabel.length > 0) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "9px 'Noto Sans JP', sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(actionLabel, canvasX + 4, canvasY + TILE_SIZE - 4);
+    }
   }
 };
 

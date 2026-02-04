@@ -131,7 +131,7 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
       if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
         state.selectedUnitId = unit.id;
-        state.movementRange = unit.food > 0 ? getMovementRange(state, unit) : null;
+        state.movementRange = unit.food > 0 && !unit.movedThisTurn ? getMovementRange(state, unit) : null;
       }
     } else {
       tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
@@ -183,13 +183,13 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
         : undefined;
-      state.movementRange = unit && unit.food > 0 ? getMovementRange(state, unit) : null;
+      state.movementRange = unit && unit.food > 0 && !unit.movedThisTurn ? getMovementRange(state, unit) : null;
     } else if (state.attackMode) {
       state.attackMode = false;
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
         : undefined;
-      state.movementRange = unit && unit.food > 0 ? getMovementRange(state, unit) : null;
+      state.movementRange = unit && unit.food > 0 && !unit.movedThisTurn ? getMovementRange(state, unit) : null;
     } else {
       state.selectedUnitId = null;
       state.movementRange = null;
@@ -300,6 +300,9 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   if (!unit) {
     return;
   }
+  if (unit.movedThisTurn) {
+    return;
+  }
 
   if (isOccupied(state, targetX, targetY, unit.id)) {
     return;
@@ -337,6 +340,9 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
 export const moveUnitTo = (state: GameState, unitId: number, targetX: number, targetY: number): boolean => {
   const unit = state.units.find((entry) => entry.id === unitId);
   if (!unit || unit.acted) {
+    return false;
+  }
+  if (unit.movedThisTurn) {
     return false;
   }
   if (isOccupied(state, targetX, targetY, unit.id)) {

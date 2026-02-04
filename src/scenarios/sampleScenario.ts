@@ -3,15 +3,15 @@ import { getTileIndex } from "../game/geometry";
 
 const layout = [
   "GGGGGGGGGGGG",
-  "GGCFGGGGRRGG",
+  "GCGFGGGGRRGG",
   "GGFTGGGGRRGG",
   "GGFFGGGGGGGG",
-  "GGGGGGMMMGGG",
+  "GGGGTGMMMGGG",
   "GGGGGGRRRGGG",
   "GGGGGGGGGGGG",
+  "GGRRGGGGGGGG",
   "GGRRGGGGGCGG",
-  "GGRRGGGGGCGG",
-  "GGGGGGGGGGGG",
+  "GGGGGGTGGGGG",
 ];
 
 const width = layout[0].length;
@@ -29,7 +29,6 @@ const legend: Record<string, TileType> = {
 const owners = new Map<number, FactionId | null>();
 owners.set(getTileIndex(1, 1, width), FactionId.Blue);
 owners.set(getTileIndex(3, 2, width), FactionId.Red);
-owners.set(getTileIndex(9, 7, width), FactionId.Blue);
 owners.set(getTileIndex(9, 8, width), FactionId.Red);
 
 const tiles: Tile[] = layout.flatMap((row, y) =>
