@@ -8,6 +8,7 @@ import {
   canHireUnitType,
   clearSelection,
   createInitialState,
+  endTurn,
   getActionMenuOptions,
   handleTileClick,
   updateState,
@@ -124,16 +125,19 @@ export class Game {
       return;
     }
     clearSelection(this.state);
+    endTurn(this.state);
   };
 
   private getLocalPosition(event: MouseEvent): { x: number; y: number } | null {
     const rect = this.canvas.getBoundingClientRect();
-    const localX = event.clientX - rect.left;
-    const localY = event.clientY - rect.top;
-    if (localX < 0 || localY < 0 || localX >= rect.width || localY >= rect.height) {
+    const rawX = event.clientX - rect.left;
+    const rawY = event.clientY - rect.top;
+    if (rawX < 0 || rawY < 0 || rawX >= rect.width || rawY >= rect.height) {
       return null;
     }
-    return { x: localX, y: localY };
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    return { x: rawX * scaleX, y: rawY * scaleY };
   }
 
   private getTilePositionFromLocal(localX: number, localY: number): { x: number; y: number } | null {

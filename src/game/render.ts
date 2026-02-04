@@ -148,6 +148,9 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (state.actionMenuOpen || state.hireMenuOpen) {
+    return;
+  }
   const { x, y } = boardToCanvas(state.cursor.x, state.cursor.y);
 
   ctx.fillStyle = "rgba(255, 219, 88, 0.25)";
