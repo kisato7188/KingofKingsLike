@@ -1,6 +1,6 @@
 import { Input } from "./Input";
 import { sampleScenario } from "../scenarios/sampleScenario";
-import { battle } from "./battle";
+import { battle, defaultBattleConfig, getExpMultiplier } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
 import { getTileIndex } from "./geometry";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
@@ -29,6 +29,11 @@ export type GameState = {
   nextUnitId: number;
   costFoodPer1: number;
   costHpPer1: number;
+  baseExpPerKill: number;
+  expThresholds: number[];
+  expAffinity: Partial<Record<UnitType, Partial<Record<UnitType, number>>>>;
+  levelBonusAttack: number;
+  applyDefenderLevelBonus: boolean;
   budgets: Record<FactionId, number>;
   baseIncome: number;
   incomePerTown: number;
@@ -58,6 +63,11 @@ export const createInitialState = (): GameState => {
     nextUnitId: Math.max(0, ...scenario.units.map((unit) => unit.id)) + 1,
     costFoodPer1: 2,
     costHpPer1: 5,
+    baseExpPerKill: 20,
+    expThresholds: [10, 25, 45, 70, 100, 135, 175, 220],
+    expAffinity: {},
+    levelBonusAttack: 1,
+    applyDefenderLevelBonus: false,
     budgets: {
       [FactionId.Blue]: 0,
       [FactionId.Red]: 0,
@@ -335,7 +345,12 @@ const tryAttackAtCursor = (state: GameState): void => {
   }
 
   const defender = state.units[defenderIndex];
-  const result = battle(attacker, defender, state.map);
+  const result = battle(attacker, defender, state.map, {
+    ...defaultBattleConfig,
+    levelBonusAttack: state.levelBonusAttack,
+    applyDefenderLevelBonus: state.applyDefenderLevelBonus,
+    affinityMultiplier: state.expAffinity,
+  });
   for (const line of result.log) {
     console.log(line);
   }
@@ -356,6 +371,15 @@ const tryAttackAtCursor = (state: GameState): void => {
     if (currentIndex !== -1) {
       state.units[currentIndex] = result.defender;
     }
+  }
+
+  if (result.defenderDefeated && !result.attackerDefeated) {
+    const expGain = calcExpGain(state, attacker, defender);
+    applyExperience(state, result.attacker.id, expGain);
+  }
+  if (result.attackerDefeated && !result.defenderDefeated) {
+    const expGain = calcExpGain(state, defender, attacker);
+    applyExperience(state, result.defender.id, expGain);
   }
 
   state.selectedUnitId = null;
@@ -490,6 +514,8 @@ export const hireUnit = (state: GameState, kingUnitId: number, unitType: UnitTyp
     power: entry.power,
     defense: entry.defense,
     level: entry.level,
+    exp: 0,
+    crown: false,
     hp: entry.hp,
     maxHp: entry.maxHp,
   });
@@ -532,6 +558,47 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
         state.movementRange = null;
       }
     }
+  }
+};
+
+const calcExpGain = (state: GameState, winner: Unit, defeated: Unit): number => {
+  const multiplier = getExpMultiplier(winner.type, defeated.type, state.expAffinity);
+  return Math.round(state.baseExpPerKill * multiplier);
+};
+
+const applyExperience = (state: GameState, unitId: number, expGain: number): void => {
+  const unitIndex = state.units.findIndex((unit) => unit.id === unitId);
+  if (unitIndex === -1) {
+    return;
+  }
+
+  const unit = state.units[unitIndex];
+  const beforeLevel = unit.level;
+  const beforeCrown = unit.crown;
+  let exp = unit.exp + expGain;
+  let level = unit.level;
+  let crown = unit.crown;
+
+  while (level < 8 && exp >= state.expThresholds[level - 1]) {
+    level += 1;
+  }
+
+  if (level === 8 && !crown && exp >= state.expThresholds[7]) {
+    crown = true;
+  }
+
+  state.units[unitIndex] = {
+    ...unit,
+    exp,
+    level,
+    crown,
+  };
+
+  if (expGain > 0) {
+    console.log(`${unit.type} gains ${expGain} exp`);
+  }
+  if (beforeLevel !== level || beforeCrown !== crown) {
+    console.log(`${unit.type} level up to ${crown ? "Crown" : `Lv${level}`}`);
   }
 };
 

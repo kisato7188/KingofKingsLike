@@ -46,6 +46,8 @@ export type Unit = {
   power: number;
   defense: number;
   level: number;
+  exp: number;
+  crown: boolean;
   hp: number;
   maxHp: number;
 };

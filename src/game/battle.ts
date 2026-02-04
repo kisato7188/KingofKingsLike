@@ -1,5 +1,16 @@
-import { MapData, TileType, Unit } from "./types";
+import { MapData, TileType, Unit, UnitType } from "./types";
 import { getTileIndex } from "./geometry";
+
+export type BattleConfig = {
+  levelBonusAttack: number;
+  applyDefenderLevelBonus: boolean;
+  affinityMultiplier?: Partial<Record<UnitType, Partial<Record<UnitType, number>>>>;
+};
+
+export const defaultBattleConfig: BattleConfig = {
+  levelBonusAttack: 1,
+  applyDefenderLevelBonus: false,
+};
 
 export type BattleResult = {
   attacker: Unit;
@@ -9,17 +20,17 @@ export type BattleResult = {
   log: string[];
 };
 
-export const battle = (attacker: Unit, defender: Unit, map: MapData): BattleResult => {
+export const battle = (attacker: Unit, defender: Unit, map: MapData, config: BattleConfig = defaultBattleConfig): BattleResult => {
   const log: string[] = [];
   const attackerAfter = { ...attacker };
   const defenderAfter = { ...defender };
 
-  const firstDamage = calcDamage(attackerAfter, defenderAfter, map);
+  const firstDamage = calcDamage(attackerAfter, defenderAfter, map, config);
   defenderAfter.hp -= firstDamage;
   log.push(`${attackerAfter.type} attacks ${defenderAfter.type} (${firstDamage} dmg)`);
 
   if (defenderAfter.hp > 0) {
-    const counterDamage = calcDamage(defenderAfter, attackerAfter, map, true);
+    const counterDamage = calcDamage(defenderAfter, attackerAfter, map, config, true);
     attackerAfter.hp -= counterDamage;
     log.push(`${defenderAfter.type} counterattacks ${attackerAfter.type} (${counterDamage} dmg)`);
   }
@@ -33,10 +44,11 @@ export const battle = (attacker: Unit, defender: Unit, map: MapData): BattleResu
   };
 };
 
-const calcDamage = (attacker: Unit, defender: Unit, map: MapData, isCounter = false): number => {
+const calcDamage = (attacker: Unit, defender: Unit, map: MapData, config: BattleConfig, isCounter = false): number => {
   const defenseBonus = getDefenseBonus(map, defender.x, defender.y);
-  const power = attacker.power + attacker.level;
-  const defense = defender.defense + defenseBonus;
+  const power = attacker.power + attacker.level * config.levelBonusAttack;
+  const defenseLevel = config.applyDefenderLevelBonus ? defender.level : 0;
+  const defense = defender.defense + defenseBonus + defenseLevel;
   const base = power - defense;
   const damage = Math.max(1, base);
   return damage;
@@ -58,4 +70,13 @@ const getDefenseBonus = (map: MapData, x: number, y: number): number => {
     default:
       return 0;
   }
+};
+
+export const getExpMultiplier = (
+  attackerType: UnitType,
+  defenderType: UnitType,
+  table?: Partial<Record<UnitType, Partial<Record<UnitType, number>>>>,
+): number => {
+  const value = table?.[attackerType]?.[defenderType];
+  return value ?? 1;
 };

@@ -113,6 +113,12 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "10px 'Noto Sans JP', sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(getLevelLabel(unit), canvasX + 4, canvasY + 4);
   }
 };
 
@@ -129,7 +135,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 208;
+  const panelHeight = 248;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -157,24 +163,25 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
   ctx.fillText(faction.name, x + 72, y + 48);
   ctx.fillStyle = "#e7e7e7";
-  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 68);
+  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 88);
   if (selectedUnit) {
-    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, y + 88);
-    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, y + 108);
+    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, y + 108);
+    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, y + 128);
+    ctx.fillText(`LV: ${getLevelLabel(selectedUnit)}  EXP: ${selectedUnit.exp}`, x + 8, y + 148);
     if (hasAdjacentEnemy(state, selectedUnit)) {
-      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 128);
+      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 168);
     }
     if (canOccupyHere(state, selectedUnit)) {
-      ctx.fillText("Command: Occupy (O)", x + 8, y + 148);
+      ctx.fillText("Command: Occupy (O)", x + 8, y + 188);
     }
     if (canHireHere(state, selectedUnit)) {
-      ctx.fillText("Command: Hire (H)", x + 8, y + 168);
+      ctx.fillText("Command: Hire (H)", x + 8, y + 208);
     }
     if (canSupplyHere(state, selectedUnit)) {
-      ctx.fillText("Command: Supply (S)", x + 8, y + 188);
+      ctx.fillText("Command: Supply (S)", x + 8, y + 228);
     }
   }
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 188);
 };
 
 const getTileColor = (type: TileType): string => {
@@ -198,6 +205,10 @@ const getTileColor = (type: TileType): string => {
 
 const getFactionColor = (state: GameState, factionId: FactionId): string => {
   return state.factions.find((faction) => faction.id === factionId)?.color ?? "#ffffff";
+};
+
+const getLevelLabel = (unit: Unit): string => {
+  return unit.crown ? "C" : `Lv${unit.level}`;
 };
 
 const canOccupyHere = (state: GameState, unit: Unit): boolean => {
