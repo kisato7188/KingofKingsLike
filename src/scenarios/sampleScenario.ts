@@ -152,6 +152,5 @@ export const sampleScenario: Scenario = {
       hp: 14,
       maxHp: 14,
     },
-    {
   ],
 };
