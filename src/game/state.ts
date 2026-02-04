@@ -1,6 +1,8 @@
 import { Input } from "./Input";
 import { sampleScenario } from "../scenarios/sampleScenario";
-import { Faction, FactionId, Scenario, Unit } from "./types";
+import { findReachableTiles, ReachableResult } from "./pathfinding";
+import { getTileIndex } from "./geometry";
+import { Faction, FactionId, Scenario, TileType, Unit } from "./types";
 
 export type GameState = {
   scenario: Scenario;
@@ -17,6 +19,7 @@ export type GameState = {
   map: Scenario["map"];
   units: Unit[];
   selectedUnitId: number | null;
+  movementRange: ReachableResult | null;
 };
 
 export const createInitialState = (): GameState => {
@@ -34,6 +37,7 @@ export const createInitialState = (): GameState => {
     map: scenario.map,
     units: scenario.units,
     selectedUnitId: null,
+    movementRange: null,
   };
   startTurn(initialState);
   return initialState;
@@ -58,14 +62,20 @@ export const updateState = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
-    const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
-    if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
-      state.selectedUnitId = unit.id;
+    if (state.selectedUnitId === null) {
+      const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
+      if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
+        state.selectedUnitId = unit.id;
+        state.movementRange = calculateMovementRange(state, unit);
+      }
+    } else {
+      tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
     }
   }
 
   if (input.isPressed("Escape") || input.isPressed("Backspace")) {
     state.selectedUnitId = null;
+    state.movementRange = null;
   }
 };
 
@@ -99,4 +109,67 @@ export const getUnitAt = (state: GameState, x: number, y: number): Unit | undefi
 
 const clamp = (value: number, min: number, max: number): number => {
   return Math.max(min, Math.min(max, value));
+};
+
+const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult => {
+  return findReachableTiles({
+    width: state.map.width,
+    height: state.map.height,
+    startX: unit.x,
+    startY: unit.y,
+    maxCost: unit.movePoints,
+    toIndex: (x, y) => getTileIndex(x, y, state.map.width),
+    isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
+    getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
+  });
+};
+
+const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number): void => {
+  if (!state.movementRange || state.selectedUnitId === null) {
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit) {
+    return;
+  }
+
+  if (isOccupied(state, targetX, targetY, unit.id)) {
+    return;
+  }
+
+  const targetIndex = getTileIndex(targetX, targetY, state.map.width);
+  if (!state.movementRange.reachable.has(targetIndex)) {
+    return;
+  }
+
+  if (unit.x === targetX && unit.y === targetY) {
+    return;
+  }
+
+  unit.x = targetX;
+  unit.y = targetY;
+  unit.acted = true;
+  state.selectedUnitId = null;
+  state.movementRange = null;
+};
+
+const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
+  return state.units.some((unit) => unit.id !== ignoreId && unit.x === x && unit.y === y);
+};
+
+const getMoveCostForTile = (state: GameState, x: number, y: number): number => {
+  const tile = state.map.tiles[getTileIndex(x, y, state.map.width)];
+  switch (tile.type) {
+    case TileType.Forest:
+      return 2;
+    case TileType.Mountain:
+      return 3;
+    case TileType.Road:
+    case TileType.Town:
+    case TileType.Castle:
+    case TileType.Grass:
+    default:
+      return 1;
+  }
 };

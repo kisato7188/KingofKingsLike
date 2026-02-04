@@ -10,6 +10,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   ctx.clearRect(0, 0, viewportWidth, viewportHeight);
 
   drawTiles(ctx, state);
+  drawMoveRange(ctx, state);
   drawGrid(ctx, state);
   drawUnits(ctx, state);
   drawCursor(ctx, state);
@@ -65,6 +66,20 @@ const drawGrid = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ctx.moveTo(0, py);
     ctx.lineTo(gridWidth, py);
     ctx.stroke();
+  }
+};
+
+const drawMoveRange = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.movementRange) {
+    return;
+  }
+
+  ctx.fillStyle = "rgba(88, 160, 255, 0.25)";
+  for (const index of state.movementRange.reachable) {
+    const x = index % state.map.width;
+    const y = Math.floor(index / state.map.width);
+    const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
+    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
   }
 };
 
