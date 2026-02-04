@@ -122,8 +122,8 @@ const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult =
     maxCost: unit.movePoints,
     maxSteps: unit.food,
     toIndex: (x, y) => getTileIndex(x, y, state.map.width),
-    isPassable: (x, y) =>
-      !isOccupied(state, x, y, unit.id) && !isBlockedByZoc(enemyZoc, x, y, unit, state.map.width),
+    isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
+    shouldStopAt: (x, y) => isBlockedByZoc(enemyZoc, x, y, unit, state.map.width),
     getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
   });
 };

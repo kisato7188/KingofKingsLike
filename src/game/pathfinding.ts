@@ -1,5 +1,6 @@
 export type MoveCostFn = (x: number, y: number) => number;
 export type PassableFn = (x: number, y: number) => boolean;
+export type StopAtFn = (x: number, y: number) => boolean;
 
 export type ReachableResult = {
   reachable: Set<number>;
@@ -16,11 +17,23 @@ export type PathfindingOptions = {
   maxSteps: number;
   isPassable: PassableFn;
   getMoveCost: MoveCostFn;
+  shouldStopAt?: StopAtFn;
   toIndex: (x: number, y: number) => number;
 };
 
 export const findReachableTiles = (options: PathfindingOptions): ReachableResult => {
-  const { width, height, startX, startY, maxCost, maxSteps, isPassable, getMoveCost, toIndex } = options;
+  const {
+    width,
+    height,
+    startX,
+    startY,
+    maxCost,
+    maxSteps,
+    isPassable,
+    getMoveCost,
+    shouldStopAt,
+    toIndex,
+  } = options;
   const reachable = new Set<number>();
   const costs = new Map<number, number>();
   const steps = new Map<number, number>();
@@ -55,6 +68,10 @@ export const findReachableTiles = (options: PathfindingOptions): ReachableResult
     }
 
     reachable.add(currentIndex);
+
+    if (shouldStopAt?.(current.x, current.y) && !(current.x === startX && current.y === startY)) {
+      continue;
+    }
 
     const neighbors = [
       { x: current.x + 1, y: current.y },
