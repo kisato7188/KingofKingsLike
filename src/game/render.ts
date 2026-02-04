@@ -122,8 +122,11 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     : undefined;
 
   ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + 8, y + 8);
-  ctx.fillText(`Turn: ${state.turn.turnNumber}`, x + 8, y + 28);
-  ctx.fillText(`Faction: ${faction.name}`, x + 8, y + 48);
+  ctx.fillText(`Round: ${state.turn.roundCount}`, x + 8, y + 28);
+  ctx.fillText("Faction:", x + 8, y + 48);
+  ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
+  ctx.fillText(faction.name, x + 72, y + 48);
+  ctx.fillStyle = "#e7e7e7";
   ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
 };
 

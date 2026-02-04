@@ -1,6 +1,6 @@
 import { Input } from "./Input";
 import { sampleScenario } from "../scenarios/sampleScenario";
-import { Faction, Scenario, Unit } from "./stateTypes";
+import { Faction, FactionId, Scenario, Unit } from "./types";
 
 export type GameState = {
   scenario: Scenario;
@@ -10,7 +10,8 @@ export type GameState = {
   };
   turn: {
     factionIndex: number;
-    turnNumber: number;
+    currentFaction: FactionId;
+    roundCount: number;
   };
   factions: Faction[];
   map: Scenario["map"];
@@ -20,15 +21,22 @@ export type GameState = {
 
 export const createInitialState = (): GameState => {
   const scenario = sampleScenario;
-  return {
+  const initialFaction = scenario.factions[0]?.id ?? FactionId.Blue;
+  const initialState: GameState = {
     scenario,
     cursor: { x: 0, y: 0 },
-    turn: { factionIndex: 0, turnNumber: 1 },
+    turn: {
+      factionIndex: 0,
+      currentFaction: initialFaction,
+      roundCount: 1,
+    },
     factions: scenario.factions,
     map: scenario.map,
     units: scenario.units,
     selectedUnitId: null,
   };
+  startTurn(initialState);
+  return initialState;
 };
 
 export const updateState = (state: GameState, input: Input): void => {
@@ -46,18 +54,43 @@ export const updateState = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("KeyE")) {
-    state.turn.factionIndex = (state.turn.factionIndex + 1) % state.factions.length;
-    state.turn.turnNumber += 1;
+    endTurn(state);
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
     const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
-    state.selectedUnitId = unit ? unit.id : null;
+    if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
+      state.selectedUnitId = unit.id;
+    }
   }
 
   if (input.isPressed("Escape") || input.isPressed("Backspace")) {
     state.selectedUnitId = null;
   }
+};
+
+const startTurn = (state: GameState): void => {
+  for (const unit of state.units) {
+    if (unit.faction === state.turn.currentFaction) {
+      unit.acted = false;
+    }
+  }
+  const factionName = state.factions.find((faction) => faction.id === state.turn.currentFaction)?.name ?? "Unknown";
+  console.debug(`Turn Start: ${factionName}`);
+};
+
+const endTurn = (state: GameState): void => {
+  const nextIndex = (state.turn.factionIndex + 1) % state.factions.length;
+  const nextFaction = state.factions[nextIndex]?.id ?? state.turn.currentFaction;
+  const wrapped = nextIndex === 0 && state.turn.factionIndex !== 0;
+
+  state.turn.factionIndex = nextIndex;
+  state.turn.currentFaction = nextFaction;
+  if (wrapped) {
+    state.turn.roundCount += 1;
+  }
+  state.selectedUnitId = null;
+  startTurn(state);
 };
 
 export const getUnitAt = (state: GameState, x: number, y: number): Unit | undefined => {

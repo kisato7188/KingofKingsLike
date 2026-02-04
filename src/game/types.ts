@@ -15,6 +15,8 @@ export enum UnitType {
 export enum FactionId {
   Red = 0,
   Blue = 1,
+  Yellow = 2,
+  Green = 3,
 }
 
 export type Tile = {
