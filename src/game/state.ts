@@ -66,7 +66,7 @@ export const updateState = (state: GameState, input: Input): void => {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
       if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
         state.selectedUnitId = unit.id;
-        state.movementRange = calculateMovementRange(state, unit);
+        state.movementRange = unit.food > 0 ? calculateMovementRange(state, unit) : null;
       }
     } else {
       tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
@@ -118,6 +118,7 @@ const calculateMovementRange = (state: GameState, unit: Unit): ReachableResult =
     startX: unit.x,
     startY: unit.y,
     maxCost: unit.movePoints,
+    maxSteps: unit.food,
     toIndex: (x, y) => getTileIndex(x, y, state.map.width),
     isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
     getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
@@ -143,12 +144,18 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
     return;
   }
 
+  const steps = state.movementRange.steps.get(targetIndex);
+  if (steps === undefined || steps <= 0 || steps > unit.food) {
+    return;
+  }
+
   if (unit.x === targetX && unit.y === targetY) {
     return;
   }
 
   unit.x = targetX;
   unit.y = targetY;
+  unit.food = Math.max(0, unit.food - steps);
   unit.acted = true;
   state.selectedUnitId = null;
   state.movementRange = null;

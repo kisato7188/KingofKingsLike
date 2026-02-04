@@ -143,6 +143,9 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillText(faction.name, x + 72, y + 48);
   ctx.fillStyle = "#e7e7e7";
   ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 68);
+  if (selectedUnit) {
+    ctx.fillText(`Food: ${selectedUnit.food}`, x + 180, y + 68);
+  }
 };
 
 const getTileColor = (type: TileType): string => {

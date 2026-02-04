@@ -4,6 +4,7 @@ export type PassableFn = (x: number, y: number) => boolean;
 export type ReachableResult = {
   reachable: Set<number>;
   costs: Map<number, number>;
+  steps: Map<number, number>;
 };
 
 export type PathfindingOptions = {
@@ -12,20 +13,23 @@ export type PathfindingOptions = {
   startX: number;
   startY: number;
   maxCost: number;
+  maxSteps: number;
   isPassable: PassableFn;
   getMoveCost: MoveCostFn;
   toIndex: (x: number, y: number) => number;
 };
 
 export const findReachableTiles = (options: PathfindingOptions): ReachableResult => {
-  const { width, height, startX, startY, maxCost, isPassable, getMoveCost, toIndex } = options;
+  const { width, height, startX, startY, maxCost, maxSteps, isPassable, getMoveCost, toIndex } = options;
   const reachable = new Set<number>();
   const costs = new Map<number, number>();
-  const open: Array<{ x: number; y: number; cost: number }> = [];
+  const steps = new Map<number, number>();
+  const open: Array<{ x: number; y: number; cost: number; steps: number }> = [];
 
   const startIndex = toIndex(startX, startY);
   costs.set(startIndex, 0);
-  open.push({ x: startX, y: startY, cost: 0 });
+  steps.set(startIndex, 0);
+  open.push({ x: startX, y: startY, cost: 0, steps: 0 });
 
   while (open.length > 0) {
     let bestIndex = 0;
@@ -38,11 +42,15 @@ export const findReachableTiles = (options: PathfindingOptions): ReachableResult
     const current = open.splice(bestIndex, 1)[0];
     const currentIndex = toIndex(current.x, current.y);
     const knownCost = costs.get(currentIndex);
-    if (knownCost === undefined || current.cost > knownCost) {
+    const knownSteps = steps.get(currentIndex);
+    if (knownCost === undefined || knownSteps === undefined) {
+      continue;
+    }
+    if (current.cost > knownCost || current.steps > knownSteps) {
       continue;
     }
 
-    if (current.cost > maxCost) {
+    if (current.cost > maxCost || current.steps > maxSteps) {
       continue;
     }
 
@@ -64,18 +72,21 @@ export const findReachableTiles = (options: PathfindingOptions): ReachableResult
       }
 
       const nextCost = current.cost + getMoveCost(next.x, next.y);
-      if (nextCost > maxCost) {
+      const nextSteps = current.steps + 1;
+      if (nextCost > maxCost || nextSteps > maxSteps) {
         continue;
       }
 
       const nextIndex = toIndex(next.x, next.y);
       const prevCost = costs.get(nextIndex);
-      if (prevCost === undefined || nextCost < prevCost) {
+      const prevSteps = steps.get(nextIndex);
+      if (prevCost === undefined || prevSteps === undefined || nextCost < prevCost || nextSteps < prevSteps) {
         costs.set(nextIndex, nextCost);
-        open.push({ x: next.x, y: next.y, cost: nextCost });
+        steps.set(nextIndex, nextSteps);
+        open.push({ x: next.x, y: next.y, cost: nextCost, steps: nextSteps });
       }
     }
   }
 
-  return { reachable, costs };
+  return { reachable, costs, steps };
 };
