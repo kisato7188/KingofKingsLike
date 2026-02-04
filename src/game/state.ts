@@ -143,14 +143,10 @@ export const updateState = (state: GameState, input: Input): void => {
       ? state.units.find((entry) => entry.id === state.selectedUnitId)
       : undefined;
     if (unit && isCaster(unit)) {
-      if (unit.movedThisTurn) {
-        state.magicError = "Magic requires no movement";
-      } else {
-        state.magicMode = true;
-        state.movementRange = null;
-        state.attackMode = false;
-        state.hireMenuOpen = false;
-      }
+      state.magicMode = true;
+      state.movementRange = null;
+      state.attackMode = false;
+      state.hireMenuOpen = false;
     }
   }
 
@@ -621,7 +617,7 @@ const tryCastSpellAtCursor = (state: GameState): void => {
   }
 
   const caster = state.units[casterIndex];
-  if (!isCaster(caster) || caster.movedThisTurn) {
+  if (!isCaster(caster)) {
     return;
   }
 

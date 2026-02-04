@@ -119,6 +119,12 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(getLevelLabel(unit), canvasX + 4, canvasY + 4);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "9px 'Noto Sans JP', sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${unit.hp}/${unit.maxHp}`, canvasX + TILE_SIZE - 4, canvasY + TILE_SIZE - 4);
   }
 };
 
@@ -134,18 +140,17 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
-  const panelWidth = 320;
-    const panelHeight = 280;
-  const padding = 8;
+  const panelWidth = 260;
   const viewportWidth = getViewportWidth(state.map);
-  const x = viewportWidth - panelWidth - padding;
-  const y = padding;
+  const viewportHeight = getViewportHeight(state.map);
+  const x = viewportWidth - panelWidth;
+  const y = 0;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.8)";
-  ctx.fillRect(x, y, panelWidth, panelHeight);
+  ctx.fillRect(x, y, panelWidth, viewportHeight);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.strokeRect(x, y, panelWidth, panelHeight);
+  ctx.strokeRect(x, y, panelWidth, viewportHeight);
 
   ctx.fillStyle = "#e7e7e7";
   ctx.font = "14px 'Noto Sans JP', sans-serif";
@@ -157,38 +162,52 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ? state.units.find((unit) => unit.id === state.selectedUnitId)
     : undefined;
 
-  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + 8, y + 8);
-  ctx.fillText(`Round: ${state.turn.roundCount}`, x + 8, y + 28);
-  ctx.fillText("Faction:", x + 8, y + 48);
+  let lineY = y + 8;
+  const lineHeight = 18;
+
+  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + 8, lineY);
+  lineY += lineHeight;
+  ctx.fillText(`Round: ${state.turn.roundCount}`, x + 8, lineY);
+  lineY += lineHeight;
+  ctx.fillText("Faction:", x + 8, lineY);
   ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
-  ctx.fillText(faction.name, x + 72, y + 48);
+  ctx.fillText(faction.name, x + 72, lineY);
   ctx.fillStyle = "#e7e7e7";
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 68);
-  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, y + 88);
+  lineY += lineHeight;
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, lineY);
+  lineY += lineHeight;
+  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, lineY);
   if (selectedUnit) {
-    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, y + 108);
-    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, y + 128);
-    ctx.fillText(`LV: ${getLevelLabel(selectedUnit)}  EXP: ${selectedUnit.exp}`, x + 8, y + 148);
+    lineY += lineHeight;
+    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, lineY);
+    lineY += lineHeight;
+    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, lineY);
+    lineY += lineHeight;
+    ctx.fillText(`LV: ${getLevelLabel(selectedUnit)}  EXP: ${selectedUnit.exp}`, x + 8, lineY);
     if (hasAdjacentEnemy(state, selectedUnit)) {
-      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, y + 168);
+      lineY += lineHeight;
+      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, lineY);
     }
     if (canOccupyHere(state, selectedUnit)) {
-      ctx.fillText("Command: Occupy (O)", x + 8, y + 188);
+      lineY += lineHeight;
+      ctx.fillText("Command: Occupy (O)", x + 8, lineY);
     }
     if (canHireHere(state, selectedUnit)) {
-      ctx.fillText("Command: Hire (H)", x + 8, y + 208);
+      lineY += lineHeight;
+      ctx.fillText("Command: Hire (H)", x + 8, lineY);
     }
     if (canSupplyHere(state, selectedUnit)) {
-      ctx.fillText("Command: Supply (S)", x + 8, y + 228);
+      lineY += lineHeight;
+      ctx.fillText("Command: Supply (S)", x + 8, lineY);
     }
     if (canMagicHere(state, selectedUnit)) {
-      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + 8, y + 248);
-    } else if (isCaster(selectedUnit) && selectedUnit.movedThisTurn) {
-      ctx.fillText("Magic: unavailable after move", x + 8, y + 248);
+      lineY += lineHeight;
+      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + 8, lineY);
     }
-      if (state.magicError) {
-        ctx.fillText(state.magicError, x + 8, y + 268);
-      }
+    if (state.magicError) {
+      lineY += lineHeight;
+      ctx.fillText(state.magicError, x + 8, lineY);
+    }
   }
 };
 
@@ -252,13 +271,13 @@ const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {
     return dx <= 1 && dy <= 1 && (dx + dy) > 0;
   });
 };
-  const canMagicHere = (state: GameState, unit: Unit): boolean => {
-    return isCaster(unit) && !unit.movedThisTurn;
-  };
+const canMagicHere = (state: GameState, unit: Unit): boolean => {
+  return isCaster(unit);
+};
 
-  const isCaster = (unit: Unit): boolean => {
-    return unitCatalog[unit.type]?.isCaster ?? false;
-  };
+const isCaster = (unit: Unit): boolean => {
+  return unitCatalog[unit.type]?.isCaster ?? false;
+};
 
 const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   if (!state.hireMenuOpen || state.selectedUnitId === null) {
