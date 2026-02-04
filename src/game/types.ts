@@ -13,6 +13,7 @@ export enum UnitType {
   Archer = "Archer",
   Knight = "Knight",
   Mage = "Mage",
+  Wizard = "Wizard",
 }
 
 export enum FactionId {

@@ -76,6 +76,20 @@ export const unitCatalog: Record<UnitType, UnitCatalogEntry> = {
     hp: 10,
     maxHp: 10,
   },
+  [UnitType.Wizard]: {
+    type: UnitType.Wizard,
+    name: "Wizard",
+    hireCost: 110,
+    isCaster: true,
+    movePoints: 3,
+    food: 24,
+    maxFood: 24,
+    power: 7,
+    defense: 3,
+    level: 1,
+    hp: 12,
+    maxHp: 12,
+  },
   [UnitType.King]: {
     type: UnitType.King,
     name: "King",
@@ -97,4 +111,5 @@ export const hireableUnits: UnitType[] = [
   UnitType.Archer,
   UnitType.Knight,
   UnitType.Mage,
+  UnitType.Wizard,
 ];

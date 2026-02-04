@@ -157,9 +157,7 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.textAlign = "left";
 
   const faction = state.factions[state.turn.factionIndex];
-  const selectedUnit = state.selectedUnitId !== null
-    ? state.units.find((unit) => unit.id === state.selectedUnitId)
-    : undefined;
+  const hoveredUnit = state.units.find((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
 
   let lineY = y + 8;
   const lineHeight = 18;
@@ -175,31 +173,31 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   lineY += lineHeight;
   ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, lineY);
   lineY += lineHeight;
-  ctx.fillText(`Selected: ${selectedUnit ? selectedUnit.type : "None"}`, x + 8, lineY);
-  if (selectedUnit) {
+  ctx.fillText(`Unit: ${hoveredUnit ? hoveredUnit.type : "None"}`, x + 8, lineY);
+  if (hoveredUnit) {
     lineY += lineHeight;
-    ctx.fillText(`Food: ${selectedUnit.food}/${selectedUnit.maxFood}`, x + 8, lineY);
+    ctx.fillText(`Food: ${hoveredUnit.food}/${hoveredUnit.maxFood}`, x + 8, lineY);
     lineY += lineHeight;
-    ctx.fillText(`HP: ${selectedUnit.hp}/${selectedUnit.maxHp}`, x + 8, lineY);
+    ctx.fillText(`HP: ${hoveredUnit.hp}/${hoveredUnit.maxHp}`, x + 8, lineY);
     lineY += lineHeight;
-    ctx.fillText(`LV: ${getLevelLabel(selectedUnit)}  EXP: ${selectedUnit.exp}`, x + 8, lineY);
-    if (hasAdjacentEnemy(state, selectedUnit)) {
+    ctx.fillText(`LV: ${getLevelLabel(hoveredUnit)}  EXP: ${hoveredUnit.exp}`, x + 8, lineY);
+    if (hasAdjacentEnemy(state, hoveredUnit)) {
       lineY += lineHeight;
       ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, lineY);
     }
-    if (canOccupyHere(state, selectedUnit)) {
+    if (canOccupyHere(state, hoveredUnit)) {
       lineY += lineHeight;
       ctx.fillText("Command: Occupy (O)", x + 8, lineY);
     }
-    if (canHireHere(state, selectedUnit)) {
+    if (canHireHere(state, hoveredUnit)) {
       lineY += lineHeight;
       ctx.fillText("Command: Hire (H)", x + 8, lineY);
     }
-    if (canSupplyHere(state, selectedUnit)) {
+    if (canSupplyHere(state, hoveredUnit)) {
       lineY += lineHeight;
       ctx.fillText("Command: Supply (S)", x + 8, lineY);
     }
-    if (canMagicHere(state, selectedUnit)) {
+    if (canMagicHere(state, hoveredUnit)) {
       lineY += lineHeight;
       ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + 8, lineY);
     }
@@ -334,6 +332,8 @@ const getUnitLabel = (type: UnitType): string => {
       return "N";
     case UnitType.Mage:
       return "M";
+    case UnitType.Wizard:
+      return "W";
     default:
       return "?";
   }
