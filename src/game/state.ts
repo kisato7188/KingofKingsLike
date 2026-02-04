@@ -3,6 +3,7 @@ import { sampleScenario } from "../scenarios/sampleScenario";
 import { battle } from "./battle";
 import { findReachableTiles, ReachableResult } from "./pathfinding";
 import { getTileIndex } from "./geometry";
+import { hireableUnits, unitCatalog } from "./unitCatalog";
 import { Faction, FactionId, Scenario, TileType, Unit, UnitType } from "./types";
 
 export type GameState = {
@@ -22,6 +23,10 @@ export type GameState = {
   selectedUnitId: number | null;
   movementRange: ReachableResult | null;
   attackMode: boolean;
+  hireMenuOpen: boolean;
+  hireSelectionIndex: number;
+  hireConsumesAction: boolean;
+  nextUnitId: number;
   budgets: Record<FactionId, number>;
   baseIncome: number;
   incomePerTown: number;
@@ -45,6 +50,10 @@ export const createInitialState = (): GameState => {
     selectedUnitId: null,
     movementRange: null,
     attackMode: false,
+    hireMenuOpen: false,
+    hireSelectionIndex: 0,
+    hireConsumesAction: false,
+    nextUnitId: Math.max(0, ...scenario.units.map((unit) => unit.id)) + 1,
     budgets: {
       [FactionId.Blue]: 0,
       [FactionId.Red]: 0,
@@ -60,6 +69,11 @@ export const createInitialState = (): GameState => {
 };
 
 export const updateState = (state: GameState, input: Input): void => {
+  if (state.hireMenuOpen) {
+    handleHireMenuInput(state, input);
+    return;
+  }
+
   let deltaX = 0;
   let deltaY = 0;
 
@@ -93,6 +107,18 @@ export const updateState = (state: GameState, input: Input): void => {
 
   if (input.isPressed("KeyO")) {
     tryOccupyAtCursor(state);
+  }
+
+  if (input.isPressed("KeyH")) {
+    const unit = state.selectedUnitId !== null
+      ? state.units.find((entry) => entry.id === state.selectedUnitId)
+      : undefined;
+    if (unit && canHireAtCastle(state, unit)) {
+      state.hireMenuOpen = true;
+      state.hireSelectionIndex = 0;
+      state.movementRange = null;
+      state.attackMode = false;
+    }
   }
 
   if (input.isPressed("KeyA")) {
@@ -144,6 +170,7 @@ const endTurn = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.hireMenuOpen = false;
   startTurn(state);
 };
 
@@ -207,6 +234,7 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.hireMenuOpen = false;
 };
 
 const tryOccupyAtCursor = (state: GameState): void => {
@@ -231,6 +259,7 @@ const tryOccupyAtCursor = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.hireMenuOpen = false;
 };
 
 const tryAttackAtCursor = (state: GameState): void => {
@@ -283,6 +312,7 @@ const tryAttackAtCursor = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.hireMenuOpen = false;
 };
 
 const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
@@ -332,6 +362,126 @@ export const getEnemyZocTiles = (
     }
   }
   return zoc;
+};
+
+export const canHireAtCastle = (state: GameState, unit: Unit): boolean => {
+  if (unit.type !== UnitType.King) {
+    return false;
+  }
+  const tile = state.map.tiles[getTileIndex(unit.x, unit.y, state.map.width)];
+  return tile.type === TileType.Castle;
+};
+
+export const getHireSpawnPosition = (state: GameState, unit: Unit): { x: number; y: number } | null => {
+  const offsets = [
+    { x: 0, y: -1 },
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+  ];
+
+  for (const offset of offsets) {
+    const x = unit.x + offset.x;
+    const y = unit.y + offset.y;
+    if (x < 0 || y < 0 || x >= state.map.width || y >= state.map.height) {
+      continue;
+    }
+    if (!isOccupied(state, x, y)) {
+      return { x, y };
+    }
+  }
+
+  return null;
+};
+
+export const canHireUnitType = (state: GameState, unit: Unit, unitType: UnitType): boolean => {
+  const entry = unitCatalog[unitType];
+  if (!entry) {
+    return false;
+  }
+  if (!canHireAtCastle(state, unit)) {
+    return false;
+  }
+  if (state.budgets[unit.faction] < entry.hireCost) {
+    return false;
+  }
+  return getHireSpawnPosition(state, unit) !== null;
+};
+
+export const hireUnit = (state: GameState, kingUnitId: number, unitType: UnitType): boolean => {
+  const king = state.units.find((unit) => unit.id === kingUnitId);
+  if (!king || !canHireAtCastle(state, king)) {
+    return false;
+  }
+
+  const entry = unitCatalog[unitType];
+  if (!entry) {
+    return false;
+  }
+  if (state.budgets[king.faction] < entry.hireCost) {
+    return false;
+  }
+
+  const spawn = getHireSpawnPosition(state, king);
+  if (!spawn) {
+    return false;
+  }
+
+  state.budgets[king.faction] -= entry.hireCost;
+  state.units.push({
+    id: state.nextUnitId,
+    type: unitType,
+    faction: king.faction,
+    x: spawn.x,
+    y: spawn.y,
+    movePoints: entry.movePoints,
+    food: entry.food,
+    acted: false,
+    power: entry.power,
+    defense: entry.defense,
+    level: entry.level,
+    hp: entry.hp,
+  });
+  state.nextUnitId += 1;
+  if (state.hireConsumesAction) {
+    king.acted = true;
+  }
+  return true;
+};
+
+const handleHireMenuInput = (state: GameState, input: Input): void => {
+  const options = hireableUnits;
+  if (options.length === 0) {
+    state.hireMenuOpen = false;
+    return;
+  }
+
+  if (input.isPressed("ArrowUp")) {
+    state.hireSelectionIndex = (state.hireSelectionIndex - 1 + options.length) % options.length;
+  }
+  if (input.isPressed("ArrowDown")) {
+    state.hireSelectionIndex = (state.hireSelectionIndex + 1) % options.length;
+  }
+
+  if (input.isPressed("Escape") || input.isPressed("Backspace") || input.isPressed("KeyH")) {
+    state.hireMenuOpen = false;
+    const unit = state.selectedUnitId !== null
+      ? state.units.find((entry) => entry.id === state.selectedUnitId)
+      : undefined;
+    state.movementRange = unit && unit.food > 0 ? calculateMovementRange(state, unit) : null;
+    return;
+  }
+
+  if (input.isPressed("Enter") || input.isPressed("Space")) {
+    const unitType = options[state.hireSelectionIndex];
+    if (state.selectedUnitId !== null) {
+      const hired = hireUnit(state, state.selectedUnitId, unitType);
+      if (hired) {
+        state.hireMenuOpen = false;
+        state.movementRange = null;
+      }
+    }
+  }
 };
 
 const isBlockedByZoc = (zoc: Set<number>, x: number, y: number, unit: Unit, width: number): boolean => {

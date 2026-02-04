@@ -10,6 +10,9 @@ export enum TileType {
 export enum UnitType {
   King = "King",
   Fighter = "Fighter",
+  Archer = "Archer",
+  Knight = "Knight",
+  Mage = "Mage",
 }
 
 export enum FactionId {

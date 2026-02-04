@@ -1,7 +1,8 @@
-import { GameState, canOccupy, getEnemyZocTiles } from "./state";
+import { GameState, canHireAtCastle, canHireUnitType, canOccupy, getEnemyZocTiles } from "./state";
 import { HUD_HEIGHT, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
+import { hireableUnits, unitCatalog } from "./unitCatalog";
 
 export const render = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const viewportWidth = getViewportWidth(state.map);
@@ -16,6 +17,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   drawUnits(ctx, state);
   drawCursor(ctx, state);
   drawDebug(ctx, state);
+  drawHireMenu(ctx, state);
 };
 
 const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
@@ -110,7 +112,7 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     ctx.font = "12px 'Noto Sans JP', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(unit.type === UnitType.King ? "K" : "F", canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
+    ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
   }
 };
 
@@ -127,7 +129,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = 320;
-  const panelHeight = 160;
+  const panelHeight = 192;
   const padding = 8;
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth - padding;
@@ -164,8 +166,11 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     if (canOccupyHere(state, selectedUnit)) {
       ctx.fillText("Command: Occupy (O)", x + 8, y + 128);
     }
+    if (canHireHere(state, selectedUnit)) {
+      ctx.fillText("Command: Hire (H)", x + 8, y + 148);
+    }
   }
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 148);
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, y + 168);
 };
 
 const getTileColor = (type: TileType): string => {
@@ -199,6 +204,10 @@ const canOccupyHere = (state: GameState, unit: Unit): boolean => {
   return canOccupy(unit, tile);
 };
 
+const canHireHere = (state: GameState, unit: Unit): boolean => {
+  return canHireAtCastle(state, unit);
+};
+
 const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {
   if (!unit) {
     return false;
@@ -211,4 +220,65 @@ const hasAdjacentEnemy = (state: GameState, unit: Unit): boolean => {
     const dy = Math.abs(other.y - unit.y);
     return dx <= 1 && dy <= 1 && (dx + dy) > 0;
   });
+};
+
+const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.hireMenuOpen || state.selectedUnitId === null) {
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit) {
+    return;
+  }
+
+  const menuX = 16;
+  const menuY = 16;
+  const menuWidth = 220;
+  const rowHeight = 22;
+  const menuHeight = 16 + hireableUnits.length * rowHeight;
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.9)";
+  ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+
+  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.textBaseline = "top";
+
+  hireableUnits.forEach((type, index) => {
+    const entry = unitCatalog[type];
+    if (!entry) {
+      return;
+    }
+
+    const y = menuY + 8 + index * rowHeight;
+    const canHire = canHireUnitType(state, unit, type);
+    const isSelected = index === state.hireSelectionIndex;
+
+    if (isSelected) {
+      ctx.fillStyle = "rgba(88, 160, 255, 0.25)";
+      ctx.fillRect(menuX + 4, y - 2, menuWidth - 8, rowHeight);
+    }
+
+    ctx.fillStyle = canHire ? "#e7e7e7" : "rgba(231, 231, 231, 0.4)";
+    ctx.fillText(`${entry.name} (${entry.hireCost})`, menuX + 8, y);
+  });
+};
+
+const getUnitLabel = (type: UnitType): string => {
+  switch (type) {
+    case UnitType.King:
+      return "K";
+    case UnitType.Fighter:
+      return "F";
+    case UnitType.Archer:
+      return "A";
+    case UnitType.Knight:
+      return "N";
+    case UnitType.Mage:
+      return "M";
+    default:
+      return "?";
+  }
 };
