@@ -2,8 +2,19 @@ import { Input } from "./Input";
 import { getViewportHeight, getViewportWidth } from "./geometry";
 import { render } from "./render";
 import { TILE_SIZE } from "./constants";
-import { clearSelection, createInitialState, handleTileClick, updateState, GameState } from "./state";
+import {
+  applyActionMenuSelection,
+  applyHireMenuSelection,
+  canHireUnitType,
+  clearSelection,
+  createInitialState,
+  getActionMenuOptions,
+  handleTileClick,
+  updateState,
+  GameState,
+} from "./state";
 import { runCpuTurn } from "./ai/cpuController";
+import { hireableUnits } from "./unitCatalog";
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -63,7 +74,11 @@ export class Game {
   }
 
   private handleMouseMove = (event: MouseEvent): void => {
-    const position = this.getTilePosition(event);
+    const local = this.getLocalPosition(event);
+    if (!local) {
+      return;
+    }
+    const position = this.getTilePositionFromLocal(local.x, local.y);
     if (!position) {
       return;
     }
@@ -75,17 +90,30 @@ export class Game {
     if (event.button !== 0) {
       return;
     }
-    const position = this.getTilePosition(event);
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller !== "Human") {
+      return;
+    }
+
+    const local = this.getLocalPosition(event);
+    if (!local) {
+      return;
+    }
+
+    if (this.state.actionMenuOpen && this.handleActionMenuClick(local.x, local.y)) {
+      return;
+    }
+
+    if (this.state.hireMenuOpen && this.handleHireMenuClick(local.x, local.y)) {
+      return;
+    }
+
+    const position = this.getTilePositionFromLocal(local.x, local.y);
     if (!position) {
       return;
     }
     this.state.cursor.x = position.x;
     this.state.cursor.y = position.y;
-
-    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
-    if (controller !== "Human") {
-      return;
-    }
     handleTileClick(this.state, position.x, position.y);
   };
 
@@ -98,10 +126,17 @@ export class Game {
     clearSelection(this.state);
   };
 
-  private getTilePosition(event: MouseEvent): { x: number; y: number } | null {
+  private getLocalPosition(event: MouseEvent): { x: number; y: number } | null {
     const rect = this.canvas.getBoundingClientRect();
     const localX = event.clientX - rect.left;
     const localY = event.clientY - rect.top;
+    if (localX < 0 || localY < 0 || localX >= rect.width || localY >= rect.height) {
+      return null;
+    }
+    return { x: localX, y: localY };
+  }
+
+  private getTilePositionFromLocal(localX: number, localY: number): { x: number; y: number } | null {
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
 
@@ -112,5 +147,94 @@ export class Game {
     const x = Math.floor(localX / TILE_SIZE);
     const y = Math.floor(localY / TILE_SIZE);
     return { x, y };
+  }
+
+  private handleActionMenuClick(localX: number, localY: number): boolean {
+    if (!this.state.actionMenuOpen || this.state.selectedUnitId === null || this.state.hireMenuOpen) {
+      return false;
+    }
+
+    const unit = this.state.units.find((entry) => entry.id === this.state.selectedUnitId);
+    if (!unit) {
+      return false;
+    }
+
+    const options = getActionMenuOptions(this.state, unit);
+    if (options.length === 0) {
+      return false;
+    }
+
+    const unitX = unit.x * TILE_SIZE;
+    const unitY = unit.y * TILE_SIZE;
+    const menuWidth = 140;
+    const rowHeight = 22;
+    const menuHeight = 16 + options.length * rowHeight;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const maxX = mapWidthPx - menuWidth - 8;
+    const maxY = mapHeightPx - menuHeight - 8;
+    const menuX = this.clamp(unitX + TILE_SIZE + 6, 8, maxX);
+    const menuY = this.clamp(unitY - 6, 8, maxY);
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return false;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY < itemTop) {
+      return true;
+    }
+
+    const index = Math.floor((localY - itemTop) / rowHeight);
+    if (index < 0 || index >= options.length) {
+      return true;
+    }
+
+    applyActionMenuSelection(this.state, index);
+    return true;
+  }
+
+  private handleHireMenuClick(localX: number, localY: number): boolean {
+    if (!this.state.hireMenuOpen || this.state.selectedUnitId === null) {
+      return false;
+    }
+
+    const unit = this.state.units.find((entry) => entry.id === this.state.selectedUnitId);
+    if (!unit) {
+      return false;
+    }
+
+    const menuX = 16;
+    const menuY = 16;
+    const menuWidth = 220;
+    const rowHeight = 22;
+    const menuHeight = 16 + hireableUnits.length * rowHeight;
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return false;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY < itemTop) {
+      return true;
+    }
+
+    const index = Math.floor((localY - itemTop) / rowHeight);
+    if (index < 0 || index >= hireableUnits.length) {
+      return true;
+    }
+
+    const unitType = hireableUnits[index];
+    if (!canHireUnitType(this.state, unit, unitType)) {
+      this.state.hireSelectionIndex = index;
+      return true;
+    }
+
+    applyHireMenuSelection(this.state, index);
+    return true;
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
   }
 }

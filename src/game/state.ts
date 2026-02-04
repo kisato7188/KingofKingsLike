@@ -756,14 +756,7 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
-    const unitType = options[state.hireSelectionIndex];
-    if (state.selectedUnitId !== null) {
-      const hired = hireUnit(state, state.selectedUnitId, unitType);
-      if (hired) {
-        state.hireMenuOpen = false;
-        state.movementRange = null;
-      }
-    }
+    applyHireMenuSelection(state, state.hireSelectionIndex);
   }
 };
 
@@ -842,30 +835,69 @@ const handleActionMenuInput = (state: GameState, input: Input): void => {
   }
 
   if (input.isPressed("Enter") || input.isPressed("Space")) {
-    const selected = options[state.actionMenuIndex];
-    if (!selected) {
-      return;
-    }
+    applyActionMenuSelection(state, state.actionMenuIndex);
+  }
+};
 
-    state.actionMenuOpen = false;
+export const applyHireMenuSelection = (state: GameState, index: number): void => {
+  const options = hireableUnits;
+  if (!state.hireMenuOpen || options.length === 0) {
+    return;
+  }
+  if (index < 0 || index >= options.length) {
+    return;
+  }
 
-    switch (selected.key) {
-      case "Move":
-        state.movementRange = getMovementRange(state, unit);
-        break;
-      case "Attack":
-        state.attackMode = true;
-        break;
-      case "Magic":
-        state.magicMode = true;
-        break;
-      case "Hire":
-        state.hireMenuOpen = true;
-        state.hireSelectionIndex = 0;
-        break;
-      default:
-        break;
+  state.hireSelectionIndex = index;
+  const unitType = options[index];
+  if (state.selectedUnitId !== null) {
+    const hired = hireUnit(state, state.selectedUnitId, unitType);
+    if (hired) {
+      state.hireMenuOpen = false;
+      state.movementRange = null;
     }
+  }
+};
+
+export const applyActionMenuSelection = (state: GameState, index: number): void => {
+  if (state.selectedUnitId === null) {
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit) {
+    return;
+  }
+
+  const options = getActionMenuOptions(state, unit);
+  if (options.length === 0 || index < 0 || index >= options.length) {
+    return;
+  }
+
+  state.actionMenuIndex = index;
+  const selected = options[index];
+  if (!selected) {
+    return;
+  }
+
+  state.actionMenuOpen = false;
+
+  switch (selected.key) {
+    case "Move":
+      state.movementRange = getMovementRange(state, unit);
+      break;
+    case "Attack":
+      state.attackMode = true;
+      break;
+    case "Magic":
+      state.magicMode = true;
+      break;
+    case "Hire":
+      state.hireMenuOpen = true;
+      state.hireSelectionIndex = 0;
+      break;
+    default:
+      break;
   }
 };
 
