@@ -1,2 +1,2 @@
 export const TILE_SIZE = 64;
-export const HUD_HEIGHT = 120;
+export const SIDEBAR_WIDTH = 260;

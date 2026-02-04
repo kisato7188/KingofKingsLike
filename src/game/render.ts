@@ -1,5 +1,5 @@
 import { GameState, canHireAtCastle, canHireUnitType, canOccupy, canSupply, getEnemyZocTiles } from "./state";
-import { HUD_HEIGHT, TILE_SIZE } from "./constants";
+import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
@@ -48,7 +48,6 @@ const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawGrid = (ctx: CanvasRenderingContext2D, state: GameState): void => {
-  const originY = HUD_HEIGHT;
   const gridWidth = state.map.width * TILE_SIZE;
   const gridHeight = state.map.height * TILE_SIZE;
 
@@ -58,13 +57,13 @@ const drawGrid = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   for (let x = 0; x <= state.map.width; x += 1) {
     const px = x * TILE_SIZE;
     ctx.beginPath();
-    ctx.moveTo(px, originY);
-    ctx.lineTo(px, originY + gridHeight);
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, gridHeight);
     ctx.stroke();
   }
 
   for (let y = 0; y <= state.map.height; y += 1) {
-    const py = originY + y * TILE_SIZE;
+    const py = y * TILE_SIZE;
     ctx.beginPath();
     ctx.moveTo(0, py);
     ctx.lineTo(gridWidth, py);
@@ -140,7 +139,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
 };
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
-  const panelWidth = 260;
+  const panelWidth = SIDEBAR_WIDTH;
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
   const x = viewportWidth - panelWidth;
