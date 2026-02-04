@@ -26,6 +26,8 @@ export type GameState = {
   selectedUnitId: number | null;
   movementRange: ReachableResult | null;
   attackMode: boolean;
+  actionMenuOpen: boolean;
+  actionMenuIndex: number;
   hireMenuOpen: boolean;
   hireSelectionIndex: number;
   hireConsumesAction: boolean;
@@ -64,6 +66,8 @@ export const createInitialState = (): GameState => {
     selectedUnitId: null,
     movementRange: null,
     attackMode: false,
+    actionMenuOpen: false,
+    actionMenuIndex: 0,
     hireMenuOpen: false,
     hireSelectionIndex: 0,
     hireConsumesAction: false,
@@ -105,6 +109,11 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
     return;
   }
 
+  if (state.actionMenuOpen) {
+    handleActionMenuInput(state, input);
+    return;
+  }
+
   let deltaX = 0;
   let deltaY = 0;
 
@@ -130,8 +139,7 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
     } else if (state.selectedUnitId === null) {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
       if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
-        state.selectedUnitId = unit.id;
-        state.movementRange = unit.food > 0 && !unit.movedThisTurn ? getMovementRange(state, unit) : null;
+        openActionMenu(state, unit);
       }
     } else {
       tryMoveSelectedUnit(state, state.cursor.x, state.cursor.y);
@@ -178,7 +186,9 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
   }
 
   if (input.isPressed("Escape") || input.isPressed("Backspace")) {
-    if (state.magicMode) {
+    if (state.actionMenuOpen) {
+      state.actionMenuOpen = false;
+    } else if (state.magicMode) {
       state.magicMode = false;
       const unit = state.selectedUnitId !== null
         ? state.units.find((entry) => entry.id === state.selectedUnitId)
@@ -201,6 +211,10 @@ export const handleTileClick = (state: GameState, x: number, y: number): void =>
   state.cursor.x = clamp(x, 0, state.map.width - 1);
   state.cursor.y = clamp(y, 0, state.map.height - 1);
 
+  if (state.actionMenuOpen) {
+    return;
+  }
+
   if (state.hireMenuOpen) {
     return;
   }
@@ -218,8 +232,7 @@ export const handleTileClick = (state: GameState, x: number, y: number): void =>
   if (state.selectedUnitId === null) {
     const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
     if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
-      state.selectedUnitId = unit.id;
-      state.movementRange = unit.food > 0 ? getMovementRange(state, unit) : null;
+      openActionMenu(state, unit);
     }
     return;
   }
@@ -231,6 +244,7 @@ export const clearSelection = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.actionMenuOpen = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
 };
@@ -262,6 +276,7 @@ export const endTurn = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
+  state.actionMenuOpen = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
   startTurn(state);
@@ -748,6 +763,108 @@ const handleHireMenuInput = (state: GameState, input: Input): void => {
         state.hireMenuOpen = false;
         state.movementRange = null;
       }
+    }
+  }
+};
+
+type ActionMenuKey = "Move" | "Attack" | "Magic" | "Hire";
+
+type ActionMenuOption = {
+  key: ActionMenuKey;
+  label: string;
+};
+
+export const getActionMenuOptions = (state: GameState, unit: Unit): ActionMenuOption[] => {
+  if (unit.acted) {
+    return [];
+  }
+
+  const options: ActionMenuOption[] = [];
+
+  if (!unit.movedThisTurn && unit.food > 0) {
+    options.push({ key: "Move", label: "移動" });
+  }
+  if (hasAdjacentEnemy(state, unit.id)) {
+    options.push({ key: "Attack", label: "攻撃" });
+  }
+  if (isCaster(unit)) {
+    options.push({ key: "Magic", label: "魔法" });
+  }
+  if (canHireAtCastle(state, unit)) {
+    options.push({ key: "Hire", label: "雇用" });
+  }
+
+  return options;
+};
+
+const openActionMenu = (state: GameState, unit: Unit): void => {
+  state.selectedUnitId = unit.id;
+  state.movementRange = null;
+  state.attackMode = false;
+  state.magicMode = false;
+  state.hireMenuOpen = false;
+  state.actionMenuOpen = true;
+  state.actionMenuIndex = 0;
+};
+
+const handleActionMenuInput = (state: GameState, input: Input): void => {
+  if (state.selectedUnitId === null) {
+    state.actionMenuOpen = false;
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit) {
+    state.actionMenuOpen = false;
+    return;
+  }
+
+  const options = getActionMenuOptions(state, unit);
+  if (options.length === 0) {
+    state.actionMenuOpen = false;
+    return;
+  }
+
+  if (state.actionMenuIndex >= options.length) {
+    state.actionMenuIndex = 0;
+  }
+
+  if (input.isPressed("ArrowUp")) {
+    state.actionMenuIndex = (state.actionMenuIndex - 1 + options.length) % options.length;
+  }
+  if (input.isPressed("ArrowDown")) {
+    state.actionMenuIndex = (state.actionMenuIndex + 1) % options.length;
+  }
+
+  if (input.isPressed("Escape") || input.isPressed("Backspace")) {
+    state.actionMenuOpen = false;
+    return;
+  }
+
+  if (input.isPressed("Enter") || input.isPressed("Space")) {
+    const selected = options[state.actionMenuIndex];
+    if (!selected) {
+      return;
+    }
+
+    state.actionMenuOpen = false;
+
+    switch (selected.key) {
+      case "Move":
+        state.movementRange = getMovementRange(state, unit);
+        break;
+      case "Attack":
+        state.attackMode = true;
+        break;
+      case "Magic":
+        state.magicMode = true;
+        break;
+      case "Hire":
+        state.hireMenuOpen = true;
+        state.hireSelectionIndex = 0;
+        break;
+      default:
+        break;
     }
   }
 };

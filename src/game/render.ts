@@ -1,4 +1,4 @@
-import { GameState, canHireAtCastle, canHireUnitType, canOccupy, canSupply, getEnemyZocTiles } from "./state";
+import { GameState, canHireAtCastle, canHireUnitType, canOccupy, canSupply, getActionMenuOptions, getEnemyZocTiles } from "./state";
 import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
@@ -17,6 +17,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   drawUnits(ctx, state);
   drawCursor(ctx, state);
   drawDebug(ctx, state);
+  drawActionMenu(ctx, state);
   drawHireMenu(ctx, state);
 };
 
@@ -155,6 +156,52 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.strokeStyle = "#ffdb58";
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+};
+
+const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.actionMenuOpen || state.selectedUnitId === null || state.hireMenuOpen) {
+    return;
+  }
+
+  const unit = state.units.find((entry) => entry.id === state.selectedUnitId);
+  if (!unit) {
+    return;
+  }
+
+  const options = getActionMenuOptions(state, unit);
+  if (options.length === 0) {
+    return;
+  }
+
+  const { x: unitX, y: unitY } = boardToCanvas(unit.x, unit.y);
+  const menuWidth = 140;
+  const rowHeight = 22;
+  const menuHeight = 16 + options.length * rowHeight;
+  const mapWidthPx = state.map.width * TILE_SIZE;
+  const mapHeightPx = state.map.height * TILE_SIZE;
+  const maxX = mapWidthPx - menuWidth - 8;
+  const maxY = mapHeightPx - menuHeight - 8;
+  const menuX = Math.max(8, Math.min(unitX + TILE_SIZE + 6, maxX));
+  const menuY = Math.max(8, Math.min(unitY - 6, maxY));
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.92)";
+  ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+
+  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.textBaseline = "top";
+
+  options.forEach((option, index) => {
+    const y = menuY + 8 + index * rowHeight;
+    const isSelected = index === state.actionMenuIndex;
+    if (isSelected) {
+      ctx.fillStyle = "rgba(88, 160, 255, 0.25)";
+      ctx.fillRect(menuX + 4, y - 2, menuWidth - 8, rowHeight);
+    }
+    ctx.fillStyle = "#e7e7e7";
+    ctx.fillText(option.label, menuX + 10, y);
+  });
 };
 
 const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
