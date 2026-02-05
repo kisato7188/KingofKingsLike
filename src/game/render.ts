@@ -24,7 +24,8 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   drawGrid(ctx, state);
   drawUnits(ctx, state);
   drawCursor(ctx, state);
-  drawDebug(ctx, state);
+  drawGlobalInfo(ctx, state);
+  drawUnitInfo(ctx, state);
   drawActionMenu(ctx, state);
   drawContextMenu(ctx, state);
   drawHireMenu(ctx, state);
@@ -249,18 +250,18 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
   ctx.fillText("ターン終了", menuX + 10, rowY);
 };
 
-const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+const drawGlobalInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const panelWidth = SIDEBAR_WIDTH;
   const viewportWidth = getViewportWidth(state.map);
-  const viewportHeight = getViewportHeight(state.map);
   const x = viewportWidth - panelWidth;
   const y = 0;
+  const height = 180;
 
-  ctx.fillStyle = "rgba(15, 17, 22, 0.8)";
-  ctx.fillRect(x, y, panelWidth, viewportHeight);
+  ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
+  ctx.fillRect(x, y, panelWidth, height);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-  ctx.strokeRect(x, y, panelWidth, viewportHeight);
+  ctx.strokeRect(x, y, panelWidth, height);
 
   ctx.fillStyle = "#e7e7e7";
   ctx.font = "14px 'Noto Sans JP', sans-serif";
@@ -268,7 +269,6 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.textAlign = "left";
 
   const faction = state.factions[state.turn.factionIndex];
-  const hoveredUnit = state.units.find((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
   const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
 
   let lineY = y + 8;
@@ -286,7 +286,32 @@ const drawDebug = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.fillText(`Ctrl: ${controller} (1-4)`, x + 8, lineY);
   lineY += lineHeight;
   ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, lineY);
-  lineY += lineHeight;
+};
+
+const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const panelWidth = SIDEBAR_WIDTH;
+  const viewportWidth = getViewportWidth(state.map);
+  const viewportHeight = getViewportHeight(state.map);
+  const x = viewportWidth - panelWidth;
+  const height = 220;
+  const y = viewportHeight - height;
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
+  ctx.fillRect(x, y, panelWidth, height);
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.strokeRect(x, y, panelWidth, height);
+
+  ctx.fillStyle = "#e7e7e7";
+  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+
+  const hoveredUnit = state.units.find((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
+
+  let lineY = y + 8;
+  const lineHeight = 18;
+
   ctx.fillText(`Unit: ${hoveredUnit ? hoveredUnit.type : "None"}`, x + 8, lineY);
   if (hoveredUnit) {
     lineY += lineHeight;

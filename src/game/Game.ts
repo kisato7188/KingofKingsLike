@@ -90,6 +90,15 @@ export class Game {
     if (!local) {
       return;
     }
+    if (this.state.actionMenuOpen) {
+      this.updateActionMenuHover(local.x, local.y);
+    }
+    if (this.state.hireMenuOpen) {
+      this.updateHireMenuHover(local.x, local.y);
+    }
+    if (this.state.contextMenuOpen) {
+      this.updateContextMenuHover(local.x, local.y);
+    }
     const position = this.getTilePositionFromLocal(local.x, local.y);
     if (!position) {
       return;
@@ -289,6 +298,101 @@ export class Game {
 
     applyContextMenuSelection(this.state, 0);
     return true;
+  }
+
+  private updateActionMenuHover(localX: number, localY: number): void {
+    if (!this.state.actionMenuOpen || this.state.selectedUnitId === null || this.state.hireMenuOpen) {
+      return;
+    }
+
+    const unit = this.state.units.find((entry) => entry.id === this.state.selectedUnitId);
+    if (!unit) {
+      return;
+    }
+
+    const options = getActionMenuOptions(this.state, unit);
+    if (options.length === 0) {
+      return;
+    }
+
+    const unitX = unit.x * TILE_SIZE;
+    const unitY = unit.y * TILE_SIZE;
+    const menuWidth = 140;
+    const rowHeight = 22;
+    const menuHeight = 16 + options.length * rowHeight;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const maxX = mapWidthPx - menuWidth - 8;
+    const maxY = mapHeightPx - menuHeight - 8;
+    const menuX = this.clamp(unitX + TILE_SIZE + 6, 8, maxX);
+    const menuY = this.clamp(unitY - 6, 8, maxY);
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY < itemTop) {
+      return;
+    }
+
+    const index = Math.floor((localY - itemTop) / rowHeight);
+    if (index >= 0 && index < options.length) {
+      this.state.actionMenuIndex = index;
+    }
+  }
+
+  private updateHireMenuHover(localX: number, localY: number): void {
+    if (!this.state.hireMenuOpen || this.state.selectedUnitId === null) {
+      return;
+    }
+
+    const menuX = 16;
+    const menuY = 16;
+    const menuWidth = 220;
+    const rowHeight = 22;
+    const menuHeight = 16 + hireableUnits.length * rowHeight;
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY < itemTop) {
+      return;
+    }
+
+    const index = Math.floor((localY - itemTop) / rowHeight);
+    if (index >= 0 && index < hireableUnits.length) {
+      this.state.hireSelectionIndex = index;
+    }
+  }
+
+  private updateContextMenuHover(localX: number, localY: number): void {
+    if (!this.state.contextMenuOpen) {
+      return;
+    }
+
+    const cursorX = this.state.cursor.x * TILE_SIZE;
+    const cursorY = this.state.cursor.y * TILE_SIZE;
+    const menuWidth = 140;
+    const rowHeight = 22;
+    const menuHeight = 16 + rowHeight;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const maxX = mapWidthPx - menuWidth - 8;
+    const maxY = mapHeightPx - menuHeight - 8;
+    const menuX = this.clamp(cursorX + TILE_SIZE + 6, 8, maxX);
+    const menuY = this.clamp(cursorY - 6, 8, maxY);
+
+    if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
+      return;
+    }
+
+    const itemTop = menuY + 8;
+    if (localY >= itemTop && localY <= itemTop + rowHeight) {
+      this.state.contextMenuIndex = 0;
+    }
   }
 
   private clamp(value: number, min: number, max: number): number {

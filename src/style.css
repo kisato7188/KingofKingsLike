@@ -33,6 +33,12 @@ body {
   padding: 16px;
 }
 
+#top-controls {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+
 #game-canvas {
   width: auto;
   height: auto;
@@ -68,17 +74,13 @@ body {
 }
 
 #turn-end-button {
-  position: fixed;
-  left: 12px;
-  bottom: 12px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(34, 40, 54, 0.9);
   color: #e7e7e7;
   font-size: 14px;
   cursor: pointer;
-  z-index: 20;
 }
 
 #turn-end-button:hover {
