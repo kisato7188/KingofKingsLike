@@ -6,6 +6,7 @@ import {
   canSupply,
   getActionMenuOptions,
   getEnemyZocTiles,
+  getHirePlacementPositions,
 } from "./state";
 import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
@@ -20,6 +21,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
 
   drawTiles(ctx, state);
   drawMoveRange(ctx, state);
+  drawHirePlacement(ctx, state);
   drawZoc(ctx, state);
   drawGrid(ctx, state);
   drawUnits(ctx, state);
@@ -100,6 +102,28 @@ const drawMoveRange = (ctx: CanvasRenderingContext2D, state: GameState): void =>
     const x = index % state.map.width;
     const y = Math.floor(index / state.map.width);
     const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
+    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+  }
+};
+
+const drawHirePlacement = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.hirePlacementMode || state.hirePlacementOriginId === null) {
+    return;
+  }
+
+  const king = state.units.find((unit) => unit.id === state.hirePlacementOriginId);
+  if (!king) {
+    return;
+  }
+
+  const positions = getHirePlacementPositions(state, king);
+  if (positions.length === 0) {
+    return;
+  }
+
+  ctx.fillStyle = "rgba(88, 255, 176, 0.25)";
+  for (const pos of positions) {
+    const { x: canvasX, y: canvasY } = boardToCanvas(pos.x, pos.y);
     ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
   }
 };
