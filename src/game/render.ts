@@ -40,7 +40,9 @@ const getUnitImage = (unitType: UnitType): UnitImageState => {
   image.onerror = () => {
     state.failed = true;
   };
-  image.src = `/units/${unitType}.png`;
+  const baseUrl = import.meta.env.BASE_URL ?? "/";
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  image.src = `${normalizedBase}units/${unitType}.png`;
 
   unitImageCache.set(unitType, state);
   return state;
