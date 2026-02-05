@@ -16,7 +16,9 @@ turnEndButton?.addEventListener("click", () => {
   game.requestEndTurn();
 });
 
-const bgm = new Audio("/bgm.mp3");
+const baseUrl = import.meta.env.BASE_URL ?? "/";
+const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+const bgm = new Audio(`${normalizedBase}bgm.mp3`);
 bgm.loop = true;
 bgm.volume = 0.5;
 bgm.preload = "auto";
