@@ -148,6 +148,10 @@ export class Game {
     if (controller !== "Human") {
       return;
     }
+    if (this.state.actionMenuOpen || this.state.hireMenuOpen || this.state.contextMenuOpen) {
+      clearSelection(this.state);
+      return;
+    }
     const local = this.getLocalPosition(event);
     if (local) {
       const position = this.getTilePositionFromLocal(local.x, local.y);
