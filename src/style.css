@@ -31,6 +31,8 @@ body {
   align-items: center;
   gap: 12px;
   padding: 16px;
+  width: 100%;
+  max-width: 100vw;
 }
 
 #top-controls {
@@ -42,6 +44,8 @@ body {
 #game-canvas {
   width: auto;
   height: auto;
+  max-width: 100%;
+  max-height: 70vh;
   image-rendering: pixelated;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: #1b1f2a;
@@ -53,6 +57,7 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  justify-content: center;
 }
 
 #bgm-controls button {
@@ -81,8 +86,36 @@ body {
   color: #e7e7e7;
   font-size: 14px;
   cursor: pointer;
+  min-height: 40px;
 }
 
 #turn-end-button:hover {
   background: rgba(52, 58, 75, 0.95);
+}
+
+@media (max-width: 768px) {
+  #game-wrap {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  #game-canvas {
+    max-height: 60vh;
+  }
+
+  #top-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  #bgm-controls {
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  #bgm-controls button,
+  #turn-end-button {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
 }
