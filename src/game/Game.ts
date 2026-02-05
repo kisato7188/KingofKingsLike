@@ -209,8 +209,8 @@ export class Game {
 
     const unitX = unit.x * TILE_SIZE;
     const unitY = unit.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
+    const menuWidth = 180;
+    const rowHeight = 28;
     const menuHeight = 16 + options.length * rowHeight;
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
@@ -249,8 +249,8 @@ export class Game {
 
     const menuX = 16;
     const menuY = 16;
-    const menuWidth = 220;
-    const rowHeight = 22;
+    const menuWidth = 280;
+    const rowHeight = 28;
     const menuHeight = 16 + hireableUnits.length * rowHeight;
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
@@ -285,8 +285,8 @@ export class Game {
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
     const cursorX = anchor.x * TILE_SIZE;
     const cursorY = anchor.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
+    const menuWidth = 180;
+    const rowHeight = 28;
     const menuHeight = 16 + rowHeight;
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
@@ -325,8 +325,8 @@ export class Game {
 
     const unitX = unit.x * TILE_SIZE;
     const unitY = unit.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
+    const menuWidth = 180;
+    const rowHeight = 28;
     const menuHeight = 16 + options.length * rowHeight;
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
@@ -357,8 +357,8 @@ export class Game {
 
     const menuX = 16;
     const menuY = 16;
-    const menuWidth = 220;
-    const rowHeight = 22;
+    const menuWidth = 280;
+    const rowHeight = 28;
     const menuHeight = 16 + hireableUnits.length * rowHeight;
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
@@ -384,8 +384,8 @@ export class Game {
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
     const cursorX = anchor.x * TILE_SIZE;
     const cursorY = anchor.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
+    const menuWidth = 180;
+    const rowHeight = 28;
     const menuHeight = 16 + rowHeight;
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;

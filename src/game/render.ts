@@ -254,8 +254,8 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
   }
 
   const { x: unitX, y: unitY } = boardToCanvas(unit.x, unit.y);
-  const menuWidth = 140;
-  const rowHeight = 22;
+  const menuWidth = 180;
+  const rowHeight = 28;
   const menuHeight = 16 + options.length * rowHeight;
   const mapWidthPx = state.map.width * TILE_SIZE;
   const mapHeightPx = state.map.height * TILE_SIZE;
@@ -269,7 +269,7 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.font = "16px 'Noto Sans JP', sans-serif";
   ctx.textBaseline = "top";
 
   options.forEach((option, index) => {
@@ -291,8 +291,8 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
 
   const anchor = state.contextMenuAnchor ?? state.cursor;
   const { x: cursorX, y: cursorY } = boardToCanvas(anchor.x, anchor.y);
-  const menuWidth = 140;
-  const rowHeight = 22;
+  const menuWidth = 180;
+  const rowHeight = 28;
   const menuHeight = 16 + rowHeight;
   const mapWidthPx = state.map.width * TILE_SIZE;
   const mapHeightPx = state.map.height * TILE_SIZE;
@@ -306,7 +306,7 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.font = "16px 'Noto Sans JP', sans-serif";
   ctx.textBaseline = "top";
 
   const rowY = menuY + 8;
@@ -495,8 +495,8 @@ const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => 
 
   const menuX = 16;
   const menuY = 16;
-  const menuWidth = 220;
-  const rowHeight = 22;
+  const menuWidth = 280;
+  const rowHeight = 28;
   const menuHeight = 16 + hireableUnits.length * rowHeight;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.9)";
@@ -504,7 +504,7 @@ const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.font = "16px 'Noto Sans JP', sans-serif";
   ctx.textBaseline = "top";
 
   hireableUnits.forEach((type, index) => {
