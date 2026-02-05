@@ -8,7 +8,14 @@ import {
   getEnemyZocTiles,
   getHirePlacementPositions,
 } from "./state";
-import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
+import {
+  ACTION_MENU_WIDTH,
+  HIRE_MENU_WIDTH,
+  MENU_FONT,
+  MENU_ROW_HEIGHT,
+  SIDEBAR_WIDTH,
+  TILE_SIZE,
+} from "./constants";
 import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
@@ -254,8 +261,8 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
   }
 
   const { x: unitX, y: unitY } = boardToCanvas(unit.x, unit.y);
-  const menuWidth = 180;
-  const rowHeight = 28;
+  const menuWidth = ACTION_MENU_WIDTH;
+  const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = 16 + options.length * rowHeight;
   const mapWidthPx = state.map.width * TILE_SIZE;
   const mapHeightPx = state.map.height * TILE_SIZE;
@@ -269,7 +276,7 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "16px 'Noto Sans JP', sans-serif";
+  ctx.font = MENU_FONT;
   ctx.textBaseline = "top";
 
   options.forEach((option, index) => {
@@ -291,8 +298,8 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
 
   const anchor = state.contextMenuAnchor ?? state.cursor;
   const { x: cursorX, y: cursorY } = boardToCanvas(anchor.x, anchor.y);
-  const menuWidth = 180;
-  const rowHeight = 28;
+  const menuWidth = ACTION_MENU_WIDTH;
+  const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = 16 + rowHeight;
   const mapWidthPx = state.map.width * TILE_SIZE;
   const mapHeightPx = state.map.height * TILE_SIZE;
@@ -306,7 +313,7 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "16px 'Noto Sans JP', sans-serif";
+  ctx.font = MENU_FONT;
   ctx.textBaseline = "top";
 
   const rowY = menuY + 8;
@@ -495,8 +502,8 @@ const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => 
 
   const menuX = 16;
   const menuY = 16;
-  const menuWidth = 280;
-  const rowHeight = 28;
+  const menuWidth = HIRE_MENU_WIDTH;
+  const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = 16 + hireableUnits.length * rowHeight;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.9)";
@@ -504,7 +511,7 @@ const drawHireMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
 
-  ctx.font = "16px 'Noto Sans JP', sans-serif";
+  ctx.font = MENU_FONT;
   ctx.textBaseline = "top";
 
   hireableUnits.forEach((type, index) => {
