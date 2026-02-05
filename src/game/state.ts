@@ -146,7 +146,7 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
       tryAttackAtCursor(state);
     } else if (state.selectedUnitId === null) {
       const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
-      if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
+      if (unit && unit.faction === state.turn.currentFaction && (!unit.acted || canHireAtCastle(state, unit))) {
         openActionMenu(state, unit);
       }
     } else {
@@ -243,7 +243,7 @@ export const handleTileClick = (state: GameState, x: number, y: number): void =>
 
   if (state.selectedUnitId === null) {
     const unit = getUnitAt(state, state.cursor.x, state.cursor.y);
-    if (unit && unit.faction === state.turn.currentFaction && !unit.acted) {
+    if (unit && unit.faction === state.turn.currentFaction && (!unit.acted || canHireAtCastle(state, unit))) {
       openActionMenu(state, unit);
     }
     return;
@@ -782,11 +782,14 @@ type ActionMenuOption = {
 };
 
 export const getActionMenuOptions = (state: GameState, unit: Unit): ActionMenuOption[] => {
-  if (unit.acted) {
-    return [];
-  }
-
   const options: ActionMenuOption[] = [];
+
+  if (unit.acted) {
+    if (canHireAtCastle(state, unit)) {
+      options.push({ key: "Hire", label: "雇用" });
+    }
+    return options;
+  }
 
   if (!unit.movedThisTurn && unit.food > 0) {
     options.push({ key: "Move", label: "移動" });
