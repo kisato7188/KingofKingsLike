@@ -200,13 +200,13 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     }
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "10px 'Noto Sans JP', sans-serif";
+    ctx.font = "20px 'Noto Sans JP', sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(getLevelLabel(unit), canvasX + 4, canvasY + 4);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "9px 'Noto Sans JP', sans-serif";
+    ctx.font = "18px 'Noto Sans JP', sans-serif";
     ctx.textAlign = "right";
     ctx.textBaseline = "bottom";
     ctx.fillText(`${unit.hp}/${unit.maxHp}`, canvasX + TILE_SIZE - 4, canvasY + TILE_SIZE - 4);
