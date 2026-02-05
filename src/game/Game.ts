@@ -157,7 +157,10 @@ export class Game {
       }
     }
     clearSelection(this.state);
-    openContextMenu(this.state);
+    const anchor = this.state.contextMenuAnchor
+      ? { ...this.state.contextMenuAnchor }
+      : { ...this.state.cursor };
+    openContextMenu(this.state, anchor);
   };
 
   private getLocalPosition(event: MouseEvent): { x: number; y: number } | null {
@@ -275,8 +278,9 @@ export class Game {
       return false;
     }
 
-    const cursorX = this.state.cursor.x * TILE_SIZE;
-    const cursorY = this.state.cursor.y * TILE_SIZE;
+    const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
+    const cursorX = anchor.x * TILE_SIZE;
+    const cursorY = anchor.y * TILE_SIZE;
     const menuWidth = 140;
     const rowHeight = 22;
     const menuHeight = 16 + rowHeight;
@@ -373,8 +377,9 @@ export class Game {
       return;
     }
 
-    const cursorX = this.state.cursor.x * TILE_SIZE;
-    const cursorY = this.state.cursor.y * TILE_SIZE;
+    const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
+    const cursorX = anchor.x * TILE_SIZE;
+    const cursorY = anchor.y * TILE_SIZE;
     const menuWidth = 140;
     const rowHeight = 22;
     const menuHeight = 16 + rowHeight;

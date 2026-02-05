@@ -30,6 +30,7 @@ export type GameState = {
   actionMenuIndex: number;
   contextMenuOpen: boolean;
   contextMenuIndex: number;
+  contextMenuAnchor: { x: number; y: number } | null;
   hireMenuOpen: boolean;
   hireSelectionIndex: number;
   hireConsumesAction: boolean;
@@ -72,6 +73,7 @@ export const createInitialState = (): GameState => {
     actionMenuIndex: 0,
     contextMenuOpen: false,
     contextMenuIndex: 0,
+    contextMenuAnchor: null,
     hireMenuOpen: false,
     hireSelectionIndex: 0,
     hireConsumesAction: false,
@@ -258,6 +260,7 @@ export const clearSelection = (state: GameState): void => {
   state.attackMode = false;
   state.actionMenuOpen = false;
   state.contextMenuOpen = false;
+  state.contextMenuAnchor = null;
   state.hireMenuOpen = false;
   state.magicMode = false;
 };
@@ -291,6 +294,7 @@ export const endTurn = (state: GameState): void => {
   state.attackMode = false;
   state.actionMenuOpen = false;
   state.contextMenuOpen = false;
+  state.contextMenuAnchor = null;
   state.hireMenuOpen = false;
   state.magicMode = false;
   startTurn(state);
@@ -918,9 +922,10 @@ export const applyActionMenuSelection = (state: GameState, index: number): void 
   }
 };
 
-export const openContextMenu = (state: GameState): void => {
+export const openContextMenu = (state: GameState, anchor?: { x: number; y: number }): void => {
   state.contextMenuOpen = true;
   state.contextMenuIndex = 0;
+  state.contextMenuAnchor = anchor ? { x: anchor.x, y: anchor.y } : { ...state.cursor };
   state.actionMenuOpen = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
@@ -936,6 +941,7 @@ export const applyContextMenuSelection = (state: GameState, index: number): void
     return;
   }
   state.contextMenuOpen = false;
+  state.contextMenuAnchor = null;
   endTurn(state);
 };
 

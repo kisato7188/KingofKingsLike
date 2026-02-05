@@ -222,7 +222,8 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void 
     return;
   }
 
-  const { x: cursorX, y: cursorY } = boardToCanvas(state.cursor.x, state.cursor.y);
+  const anchor = state.contextMenuAnchor ?? state.cursor;
+  const { x: cursorX, y: cursorY } = boardToCanvas(anchor.x, anchor.y);
   const menuWidth = 140;
   const rowHeight = 22;
   const menuHeight = 16 + rowHeight;
