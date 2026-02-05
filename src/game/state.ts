@@ -876,6 +876,10 @@ export const applyHireMenuSelection = (state: GameState, index: number): void =>
     if (hired) {
       state.hireMenuOpen = false;
       state.movementRange = null;
+      state.selectedUnitId = null;
+      state.actionMenuOpen = false;
+      state.attackMode = false;
+      state.magicMode = false;
     }
   }
 };
