@@ -13,6 +13,39 @@ import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from
 import { FactionId, TileType, Unit, UnitType } from "./types";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
 
+type UnitImageState = {
+  image: HTMLImageElement;
+  loaded: boolean;
+  failed: boolean;
+};
+
+const unitImageCache = new Map<UnitType, UnitImageState>();
+
+const getUnitImage = (unitType: UnitType): UnitImageState => {
+  const cached = unitImageCache.get(unitType);
+  if (cached) {
+    return cached;
+  }
+
+  const image = new Image();
+  const state: UnitImageState = {
+    image,
+    loaded: false,
+    failed: false,
+  };
+
+  image.onload = () => {
+    state.loaded = true;
+  };
+  image.onerror = () => {
+    state.failed = true;
+  };
+  image.src = `/units/${unitType}.png`;
+
+  unitImageCache.set(unitType, state);
+  return state;
+};
+
 export const render = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
@@ -147,14 +180,22 @@ const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
     const size = 18;
     const offset = (TILE_SIZE - size) / 2;
 
-    ctx.fillStyle = color;
-    ctx.fillRect(canvasX + offset, canvasY + offset, size, size);
+    const imageState = getUnitImage(unit.type);
+    if (imageState.loaded && !imageState.failed) {
+      const smoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(imageState.image, canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+      ctx.imageSmoothingEnabled = smoothing;
+    } else {
+      ctx.fillStyle = color;
+      ctx.fillRect(canvasX + offset, canvasY + offset, size, size);
 
-    ctx.fillStyle = "#0f1116";
-    ctx.font = "12px 'Noto Sans JP', sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
+      ctx.fillStyle = "#0f1116";
+      ctx.font = "12px 'Noto Sans JP', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
+    }
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "10px 'Noto Sans JP', sans-serif";
