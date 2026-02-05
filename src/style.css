@@ -100,12 +100,10 @@ body {
 
   #bgm-controls {
     gap: 6px;
-    font-size: 13px;
   }
 
   #bgm-controls button,
   #turn-end-button {
     padding: 10px 14px;
-    font-size: 14px;
   }
 }
