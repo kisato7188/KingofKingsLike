@@ -267,13 +267,15 @@ const drawUnits = (
     const drawPosition = unitDrawPositions?.get(unit.id) ?? { x: unit.x, y: unit.y };
     const { x: canvasX, y: canvasY } = boardToCanvas(drawPosition.x, drawPosition.y);
     const color = getFactionColor(state, unit.faction);
-    const spriteScale = 1.1;
+    const spriteScale = 1.2;
     const spriteSize = Math.round(TILE_SIZE * spriteScale);
+    const spriteShiftY = Math.round(spriteSize * 0.25);
     const spriteX = canvasX + TILE_SIZE / 2 - spriteSize / 2;
-    const spriteY = canvasY + TILE_SIZE / 2 - spriteSize;
+    const spriteY = canvasY - spriteShiftY;
     const fallbackSize = Math.round(TILE_SIZE * 0.22);
+    const fallbackShiftY = Math.round(fallbackSize * 0.25);
     const fallbackX = canvasX + TILE_SIZE / 2 - fallbackSize / 2;
-    const fallbackY = canvasY + TILE_SIZE / 2 - fallbackSize / 2;
+    const fallbackY = canvasY - fallbackShiftY;
 
     const imageState = getUnitImage(unit.type);
     if (imageState.loaded && !imageState.failed) {
