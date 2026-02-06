@@ -267,18 +267,23 @@ const drawUnits = (
     const drawPosition = unitDrawPositions?.get(unit.id) ?? { x: unit.x, y: unit.y };
     const { x: canvasX, y: canvasY } = boardToCanvas(drawPosition.x, drawPosition.y);
     const color = getFactionColor(state, unit.faction);
-    const size = 18;
-    const offset = (TILE_SIZE - size) / 2;
+    const spriteScale = 1.1;
+    const spriteSize = Math.round(TILE_SIZE * spriteScale);
+    const spriteX = canvasX + TILE_SIZE / 2 - spriteSize / 2;
+    const spriteY = canvasY + TILE_SIZE / 2 - spriteSize;
+    const fallbackSize = Math.round(TILE_SIZE * 0.22);
+    const fallbackX = canvasX + TILE_SIZE / 2 - fallbackSize / 2;
+    const fallbackY = canvasY + TILE_SIZE / 2 - fallbackSize / 2;
 
     const imageState = getUnitImage(unit.type);
     if (imageState.loaded && !imageState.failed) {
       const smoothing = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(imageState.image, canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+      ctx.drawImage(imageState.image, spriteX, spriteY, spriteSize, spriteSize);
       ctx.imageSmoothingEnabled = smoothing;
     } else {
       ctx.fillStyle = color;
-      ctx.fillRect(canvasX + offset, canvasY + offset, size, size);
+      ctx.fillRect(fallbackX, fallbackY, fallbackSize, fallbackSize);
 
       ctx.fillStyle = "#0f1116";
       ctx.font = "12px 'Noto Sans JP', sans-serif";
