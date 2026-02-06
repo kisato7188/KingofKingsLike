@@ -68,6 +68,17 @@ const getUnitImage = (unitType: UnitType): UnitImageState => {
 export type UnitDrawPositions = Map<number, { x: number; y: number }>;
 export type MapView = { zoom: number; offsetX: number; offsetY: number };
 
+const getView = (view?: MapView): MapView => {
+  return view ?? { zoom: 1, offsetX: 0, offsetY: 0 };
+};
+
+const mapToScreen = (view: MapView, mapX: number, mapY: number): { x: number; y: number } => {
+  return {
+    x: view.offsetX + mapX * view.zoom,
+    y: view.offsetY + mapY * view.zoom,
+  };
+};
+
 export const render = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -100,12 +111,11 @@ export const render = (
   drawGrid(ctx, state);
   drawUnits(ctx, state, unitDrawPositions);
   drawCursor(ctx, state);
-  drawActionMenu(ctx, state);
-  drawContextMenu(ctx, state);
-  drawHireMenu(ctx, state);
-
   ctx.restore();
 
+  drawActionMenu(ctx, state, view);
+  drawContextMenu(ctx, state, view);
+  drawHireMenu(ctx, state);
   drawGlobalInfo(ctx, state);
   drawUnitInfo(ctx, state);
 };
@@ -285,7 +295,7 @@ const drawCursor = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   ctx.strokeRect(x + CURSOR_INSET, y + CURSOR_INSET, TILE_SIZE - CURSOR_INSET * 2, TILE_SIZE - CURSOR_INSET * 2);
 };
 
-const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState, view?: MapView): void => {
   if (!state.actionMenuOpen || state.selectedUnitId === null || state.hireMenuOpen) {
     return;
   }
@@ -300,16 +310,20 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
     return;
   }
 
+  const mapView = getView(view);
   const { x: unitX, y: unitY } = boardToCanvas(unit.x, unit.y);
+  const screenPos = mapToScreen(mapView, unitX, unitY);
   const menuWidth = ACTION_MENU_WIDTH;
   const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-  const mapWidthPx = state.map.width * TILE_SIZE;
-  const mapHeightPx = state.map.height * TILE_SIZE;
-  const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-  const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-  const menuX = Math.max(MENU_EDGE_PADDING, Math.min(unitX + TILE_SIZE + MENU_UNIT_OFFSET, maxX));
-  const menuY = Math.max(MENU_EDGE_PADDING, Math.min(unitY - MENU_UNIT_OFFSET, maxY));
+  const mapWidthPx = state.map.width * TILE_SIZE * mapView.zoom;
+  const mapHeightPx = state.map.height * TILE_SIZE * mapView.zoom;
+  const minX = mapView.offsetX + MENU_EDGE_PADDING;
+  const minY = mapView.offsetY + MENU_EDGE_PADDING;
+  const maxX = mapView.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+  const maxY = mapView.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+  const menuX = Math.max(minX, Math.min(screenPos.x + TILE_SIZE * mapView.zoom + MENU_UNIT_OFFSET, maxX));
+  const menuY = Math.max(minY, Math.min(screenPos.y - MENU_UNIT_OFFSET, maxY));
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.92)";
   ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
@@ -331,22 +345,26 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState): void =
   });
 };
 
-const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState, view?: MapView): void => {
   if (!state.contextMenuOpen) {
     return;
   }
 
   const anchor = state.contextMenuAnchor ?? state.cursor;
+  const mapView = getView(view);
   const { x: cursorX, y: cursorY } = boardToCanvas(anchor.x, anchor.y);
+  const screenPos = mapToScreen(mapView, cursorX, cursorY);
   const menuWidth = ACTION_MENU_WIDTH;
   const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = MENU_PADDING_Y + rowHeight;
-  const mapWidthPx = state.map.width * TILE_SIZE;
-  const mapHeightPx = state.map.height * TILE_SIZE;
-  const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-  const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-  const menuX = Math.max(MENU_EDGE_PADDING, Math.min(cursorX + TILE_SIZE + MENU_UNIT_OFFSET, maxX));
-  const menuY = Math.max(MENU_EDGE_PADDING, Math.min(cursorY - MENU_UNIT_OFFSET, maxY));
+  const mapWidthPx = state.map.width * TILE_SIZE * mapView.zoom;
+  const mapHeightPx = state.map.height * TILE_SIZE * mapView.zoom;
+  const minX = mapView.offsetX + MENU_EDGE_PADDING;
+  const minY = mapView.offsetY + MENU_EDGE_PADDING;
+  const maxX = mapView.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+  const maxY = mapView.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+  const menuX = Math.max(minX, Math.min(screenPos.x + TILE_SIZE * mapView.zoom + MENU_UNIT_OFFSET, maxX));
+  const menuY = Math.max(minY, Math.min(screenPos.y - MENU_UNIT_OFFSET, maxY));
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.92)";
   ctx.fillRect(menuX, menuY, menuWidth, menuHeight);

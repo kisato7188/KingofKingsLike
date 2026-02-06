@@ -30,10 +30,8 @@ import { runCpuTurn } from "./ai/cpuController";
 import { hireableUnits } from "./unitCatalog";
 
 type UnitAnimation = {
-  fromX: number;
-  fromY: number;
-  toX: number;
-  toY: number;
+  path: Array<{ x: number; y: number }>;
+  segmentIndex: number;
   elapsed: number;
   duration: number;
 };
@@ -151,6 +149,16 @@ export class Game {
     return { zoom: this.zoom, offsetX, offsetY };
   }
 
+  private getScreenPositionFromTile(x: number, y: number): { x: number; y: number } {
+    const view = this.getMapView();
+    const mapX = x * TILE_SIZE;
+    const mapY = y * TILE_SIZE;
+    return {
+      x: view.offsetX + mapX * view.zoom,
+      y: view.offsetY + mapY * view.zoom,
+    };
+  }
+
   private getMapLocalPosition(localX: number, localY: number): { x: number; y: number } | null {
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
@@ -167,9 +175,27 @@ export class Game {
   }
 
   private syncUnitAnimations(previousPositions: Map<number, { x: number; y: number }>, delta: number): void {
+    if (this.state.movementPaths.size > 0) {
+      for (const [unitId, path] of this.state.movementPaths.entries()) {
+        if (path.length >= 2) {
+          this.unitAnimations.set(unitId, {
+            path,
+            segmentIndex: 0,
+            elapsed: 0,
+            duration: MOVE_SECONDS_PER_TILE,
+          });
+        }
+      }
+      this.state.movementPaths.clear();
+    }
+
     for (const [unitId, anim] of this.unitAnimations.entries()) {
       anim.elapsed += delta;
-      if (anim.elapsed >= anim.duration) {
+      while (anim.elapsed >= anim.duration && anim.segmentIndex < anim.path.length - 2) {
+        anim.elapsed -= anim.duration;
+        anim.segmentIndex += 1;
+      }
+      if (anim.segmentIndex >= anim.path.length - 1) {
         this.unitAnimations.delete(unitId);
       }
     }
@@ -183,14 +209,15 @@ export class Game {
         this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
         continue;
       }
-      if (previous.x !== unit.x || previous.y !== unit.y) {
+      if ((previous.x !== unit.x || previous.y !== unit.y) && !this.unitAnimations.has(unit.id)) {
         const distance = Math.abs(unit.x - previous.x) + Math.abs(unit.y - previous.y);
         const duration = Math.max(MIN_MOVE_DURATION, distance * MOVE_SECONDS_PER_TILE);
         this.unitAnimations.set(unit.id, {
-          fromX: previous.x,
-          fromY: previous.y,
-          toX: unit.x,
-          toY: unit.y,
+          path: [
+            { x: previous.x, y: previous.y },
+            { x: unit.x, y: unit.y },
+          ],
+          segmentIndex: 0,
           elapsed: 0,
           duration,
         });
@@ -215,8 +242,10 @@ export class Game {
         continue;
       }
       const progress = Math.min(1, anim.elapsed / anim.duration);
-      const x = anim.fromX + (anim.toX - anim.fromX) * progress;
-      const y = anim.fromY + (anim.toY - anim.fromY) * progress;
+      const from = anim.path[anim.segmentIndex] ?? { x: unit.x, y: unit.y };
+      const to = anim.path[anim.segmentIndex + 1] ?? from;
+      const x = from.x + (to.x - from.x) * progress;
+      const y = from.y + (to.y - from.y) * progress;
       positions.set(unit.id, { x, y });
     }
     return positions;
@@ -227,15 +256,14 @@ export class Game {
     if (!local) {
       return;
     }
-    const mapLocal = this.getMapLocalPosition(local.x, local.y);
-    if (this.state.actionMenuOpen && mapLocal) {
-      this.updateActionMenuHover(mapLocal.x, mapLocal.y);
+    if (this.state.actionMenuOpen) {
+      this.updateActionMenuHover(local.x, local.y);
     }
-    if (this.state.hireMenuOpen && mapLocal) {
-      this.updateHireMenuHover(mapLocal.x, mapLocal.y);
+    if (this.state.hireMenuOpen) {
+      this.updateHireMenuHover(local.x, local.y);
     }
-    if (this.state.contextMenuOpen && mapLocal) {
-      this.updateContextMenuHover(mapLocal.x, mapLocal.y);
+    if (this.state.contextMenuOpen) {
+      this.updateContextMenuHover(local.x, local.y);
     }
     const position = this.getTilePositionFromLocal(local.x, local.y);
     if (!position) {
@@ -259,17 +287,15 @@ export class Game {
       return;
     }
 
-    const mapLocal = this.getMapLocalPosition(local.x, local.y);
-
-    if (this.state.actionMenuOpen && mapLocal && this.handleActionMenuClick(mapLocal.x, mapLocal.y)) {
+    if (this.state.actionMenuOpen && this.handleActionMenuClick(local.x, local.y)) {
       return;
     }
 
-    if (this.state.hireMenuOpen && mapLocal && this.handleHireMenuClick(mapLocal.x, mapLocal.y)) {
+    if (this.state.hireMenuOpen && this.handleHireMenuClick(local.x, local.y)) {
       return;
     }
 
-    if (this.state.contextMenuOpen && mapLocal && this.handleContextMenuClick(mapLocal.x, mapLocal.y)) {
+    if (this.state.contextMenuOpen && this.handleContextMenuClick(local.x, local.y)) {
       return;
     }
 
@@ -345,17 +371,19 @@ export class Game {
       return false;
     }
 
-    const unitX = unit.x * TILE_SIZE;
-    const unitY = unit.y * TILE_SIZE;
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(unit.x, unit.y);
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-    const menuX = this.clamp(unitX + TILE_SIZE + MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxX);
-    const menuY = this.clamp(unitY - MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxY);
+    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
+    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
+    const minX = view.offsetX + MENU_EDGE_PADDING;
+    const minY = view.offsetY + MENU_EDGE_PADDING;
+    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return false;
@@ -421,17 +449,19 @@ export class Game {
     }
 
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
-    const cursorX = anchor.x * TILE_SIZE;
-    const cursorY = anchor.y * TILE_SIZE;
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(anchor.x, anchor.y);
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-    const menuX = this.clamp(cursorX + TILE_SIZE + MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxX);
-    const menuY = this.clamp(cursorY - MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxY);
+    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
+    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
+    const minX = view.offsetX + MENU_EDGE_PADDING;
+    const minY = view.offsetY + MENU_EDGE_PADDING;
+    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return false;
@@ -461,17 +491,19 @@ export class Game {
       return;
     }
 
-    const unitX = unit.x * TILE_SIZE;
-    const unitY = unit.y * TILE_SIZE;
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(unit.x, unit.y);
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-    const menuX = this.clamp(unitX + TILE_SIZE + MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxX);
-    const menuY = this.clamp(unitY - MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxY);
+    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
+    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
+    const minX = view.offsetX + MENU_EDGE_PADDING;
+    const minY = view.offsetY + MENU_EDGE_PADDING;
+    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return;
@@ -520,17 +552,19 @@ export class Game {
     }
 
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
-    const cursorX = anchor.x * TILE_SIZE;
-    const cursorY = anchor.y * TILE_SIZE;
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(anchor.x, anchor.y);
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = mapHeightPx - menuHeight - MENU_EDGE_PADDING;
-    const menuX = this.clamp(cursorX + TILE_SIZE + MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxX);
-    const menuY = this.clamp(cursorY - MENU_UNIT_OFFSET, MENU_EDGE_PADDING, maxY);
+    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
+    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
+    const minX = view.offsetX + MENU_EDGE_PADDING;
+    const minY = view.offsetY + MENU_EDGE_PADDING;
+    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return;

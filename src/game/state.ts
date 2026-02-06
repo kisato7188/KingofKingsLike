@@ -28,6 +28,7 @@ export type GameState = {
   attackMode: boolean;
   actionMenuOpen: boolean;
   actionMenuIndex: number;
+  movementPaths: Map<number, Array<{ x: number; y: number }>>;
   contextMenuOpen: boolean;
   contextMenuIndex: number;
   contextMenuAnchor: { x: number; y: number } | null;
@@ -74,6 +75,7 @@ export const createInitialState = (): GameState => {
     attackMode: false,
     actionMenuOpen: false,
     actionMenuIndex: 0,
+    movementPaths: new Map<number, Array<{ x: number; y: number }>>(),
     contextMenuOpen: false,
     contextMenuIndex: 0,
     contextMenuAnchor: null,
@@ -350,6 +352,85 @@ export const getMovementRange = (state: GameState, unit: Unit): ReachableResult 
   });
 };
 
+const buildMovePath = (
+  state: GameState,
+  unit: Unit,
+  targetX: number,
+  targetY: number,
+  range: ReachableResult,
+): Array<{ x: number; y: number }> | null => {
+  const startX = unit.x;
+  const startY = unit.y;
+  if (startX === targetX && startY === targetY) {
+    return [{ x: startX, y: startY }];
+  }
+
+  const width = state.map.width;
+  const targetIndex = getTileIndex(targetX, targetY, width);
+  const targetSteps = range.steps.get(targetIndex);
+  const targetCost = range.costs.get(targetIndex);
+  if (targetSteps === undefined || targetCost === undefined) {
+    return null;
+  }
+
+  const path: Array<{ x: number; y: number }> = [{ x: targetX, y: targetY }];
+  let currentX = targetX;
+  let currentY = targetY;
+  let currentSteps = targetSteps;
+  let currentCost = targetCost;
+  const visited = new Set<number>();
+
+  while (!(currentX === startX && currentY === startY)) {
+    const currentIndex = getTileIndex(currentX, currentY, width);
+    if (visited.has(currentIndex)) {
+      return null;
+    }
+    visited.add(currentIndex);
+
+    const neighbors = [
+      { x: currentX + 1, y: currentY },
+      { x: currentX - 1, y: currentY },
+      { x: currentX, y: currentY + 1 },
+      { x: currentX, y: currentY - 1 },
+    ];
+
+    const stepCost = getMoveCostForTile(state, currentX, currentY);
+    let found = false;
+
+    for (const next of neighbors) {
+      if (next.x < 0 || next.y < 0 || next.x >= width || next.y >= state.map.height) {
+        continue;
+      }
+      const nextIndex = getTileIndex(next.x, next.y, width);
+      const nextSteps = range.steps.get(nextIndex);
+      const nextCost = range.costs.get(nextIndex);
+      if (nextSteps === undefined || nextCost === undefined) {
+        continue;
+      }
+      if (nextSteps !== currentSteps - 1) {
+        continue;
+      }
+      if (nextCost + stepCost !== currentCost) {
+        continue;
+      }
+
+      path.push({ x: next.x, y: next.y });
+      currentX = next.x;
+      currentY = next.y;
+      currentSteps = nextSteps;
+      currentCost = nextCost;
+      found = true;
+      break;
+    }
+
+    if (!found) {
+      return null;
+    }
+  }
+
+  return path.reverse();
+};
+
 const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number): void => {
   if (!state.movementRange || state.selectedUnitId === null) {
     return;
@@ -379,6 +460,11 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
 
   if (unit.x === targetX && unit.y === targetY) {
     return;
+  }
+
+  const path = buildMovePath(state, unit, targetX, targetY, state.movementRange);
+  if (path) {
+    state.movementPaths.set(unit.id, path);
   }
 
   unit.x = targetX;
@@ -418,6 +504,10 @@ export const moveUnitTo = (state: GameState, unitId: number, targetX: number, ta
   }
   if (unit.x === targetX && unit.y === targetY) {
     return false;
+  }
+  const path = buildMovePath(state, unit, targetX, targetY, range);
+  if (path) {
+    state.movementPaths.set(unit.id, path);
   }
   unit.x = targetX;
   unit.y = targetY;
