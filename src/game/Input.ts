@@ -17,6 +17,10 @@ const HANDLED_KEYS = new Set([
   "Digit2",
   "Digit3",
   "Digit4",
+  "Equal",
+  "Minus",
+  "NumpadAdd",
+  "NumpadSubtract",
 ]);
 
 export class Input {
