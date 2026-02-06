@@ -36,7 +36,7 @@ type UnitAnimation = {
   duration: number;
 };
 
-const MOVE_SECONDS_PER_TILE = 0.3;
+const MOVE_SECONDS_PER_TILE = 0.2;
 const MIN_MOVE_DURATION = 0.05;
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM = 0.5;

@@ -10,6 +10,7 @@ import {
 } from "./state";
 import {
   ACTION_MENU_WIDTH,
+  ACTION_LABEL_FONT_SIZE,
   CURSOR_INSET,
   CURSOR_STROKE_WIDTH,
   HIRE_MENU_WIDTH,
@@ -23,6 +24,9 @@ import {
   MENU_ROW_HEIGHT,
   MENU_TEXT_OFFSET_X,
   MENU_UNIT_OFFSET,
+  SIDEBAR_FONT_SIZE,
+  SIDEBAR_LINE_HEIGHT,
+  SIDEBAR_PANEL_PADDING,
   SIDEBAR_WIDTH,
   TILE_SIZE,
 } from "./constants";
@@ -256,6 +260,11 @@ const drawUnits = (
       ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
     }
 
+    if (unit.movedThisTurn && unit.acted) {
+      ctx.fillStyle = "rgba(120, 120, 120, 0.45)";
+      ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+    }
+
     ctx.fillStyle = "#ffffff";
     ctx.font = "20px 'Noto Sans JP', sans-serif";
     ctx.textAlign = "left";
@@ -273,7 +282,7 @@ const drawUnits = (
     const actionLabel = `${movePossible ? "M" : ""}${actionPossible ? "A" : ""}`;
     if (actionLabel.length > 0) {
       ctx.fillStyle = "#ffffff";
-      ctx.font = "9px 'Noto Sans JP', sans-serif";
+      ctx.font = `${ACTION_LABEL_FONT_SIZE}px 'Noto Sans JP', sans-serif`;
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
       ctx.fillText(actionLabel, canvasX + 4, canvasY + TILE_SIZE - 4);
@@ -388,7 +397,7 @@ const drawGlobalInfo = (ctx: CanvasRenderingContext2D, state: GameState): void =
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth;
   const y = 0;
-  const height = 180;
+  const height = 270;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
   ctx.fillRect(x, y, panelWidth, height);
@@ -397,28 +406,28 @@ const drawGlobalInfo = (ctx: CanvasRenderingContext2D, state: GameState): void =
   ctx.strokeRect(x, y, panelWidth, height);
 
   ctx.fillStyle = "#e7e7e7";
-  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.font = `${SIDEBAR_FONT_SIZE}px 'Noto Sans JP', sans-serif`;
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
 
   const faction = state.factions[state.turn.factionIndex];
   const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
 
-  let lineY = y + 8;
-  const lineHeight = 18;
+  let lineY = y + SIDEBAR_PANEL_PADDING;
+  const lineHeight = SIDEBAR_LINE_HEIGHT;
 
-  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + 8, lineY);
+  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText(`Round: ${state.turn.roundCount}`, x + 8, lineY);
+  ctx.fillText(`Round: ${state.turn.roundCount}`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText("Faction:", x + 8, lineY);
+  ctx.fillText("Faction:", x + SIDEBAR_PANEL_PADDING, lineY);
   ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
-  ctx.fillText(faction.name, x + 72, lineY);
+  ctx.fillText(faction.name, x + SIDEBAR_PANEL_PADDING + 64, lineY);
   ctx.fillStyle = "#e7e7e7";
   lineY += lineHeight;
-  ctx.fillText(`Ctrl: ${controller} (1-4)`, x + 8, lineY);
+  ctx.fillText(`Ctrl: ${controller} (1-4)`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + 8, lineY);
+  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + SIDEBAR_PANEL_PADDING, lineY);
 };
 
 const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => {
@@ -426,7 +435,7 @@ const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => 
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
   const x = viewportWidth - panelWidth;
-  const height = 220;
+  const height = 330;
   const y = viewportHeight - height;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
@@ -436,46 +445,46 @@ const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => 
   ctx.strokeRect(x, y, panelWidth, height);
 
   ctx.fillStyle = "#e7e7e7";
-  ctx.font = "14px 'Noto Sans JP', sans-serif";
+  ctx.font = `${SIDEBAR_FONT_SIZE}px 'Noto Sans JP', sans-serif`;
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
 
   const hoveredUnit = state.units.find((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
 
-  let lineY = y + 8;
-  const lineHeight = 18;
+  let lineY = y + SIDEBAR_PANEL_PADDING;
+  const lineHeight = SIDEBAR_LINE_HEIGHT;
 
-  ctx.fillText(`Unit: ${hoveredUnit ? hoveredUnit.type : "None"}`, x + 8, lineY);
+  ctx.fillText(`Unit: ${hoveredUnit ? hoveredUnit.type : "None"}`, x + SIDEBAR_PANEL_PADDING, lineY);
   if (hoveredUnit) {
     lineY += lineHeight;
-    ctx.fillText(`Food: ${hoveredUnit.food}/${hoveredUnit.maxFood}`, x + 8, lineY);
+    ctx.fillText(`Food: ${hoveredUnit.food}/${hoveredUnit.maxFood}`, x + SIDEBAR_PANEL_PADDING, lineY);
     lineY += lineHeight;
-    ctx.fillText(`HP: ${hoveredUnit.hp}/${hoveredUnit.maxHp}`, x + 8, lineY);
+    ctx.fillText(`HP: ${hoveredUnit.hp}/${hoveredUnit.maxHp}`, x + SIDEBAR_PANEL_PADDING, lineY);
     lineY += lineHeight;
-    ctx.fillText(`LV: ${getLevelLabel(hoveredUnit)}  EXP: ${hoveredUnit.exp}`, x + 8, lineY);
+    ctx.fillText(`LV: ${getLevelLabel(hoveredUnit)}  EXP: ${hoveredUnit.exp}`, x + SIDEBAR_PANEL_PADDING, lineY);
     if (hasAdjacentEnemy(state, hoveredUnit)) {
       lineY += lineHeight;
-      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + 8, lineY);
+      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + SIDEBAR_PANEL_PADDING, lineY);
     }
     if (canOccupyHere(state, hoveredUnit)) {
       lineY += lineHeight;
-      ctx.fillText("Command: Occupy (O)", x + 8, lineY);
+      ctx.fillText("Command: Occupy (O)", x + SIDEBAR_PANEL_PADDING, lineY);
     }
     if (canHireHere(state, hoveredUnit)) {
       lineY += lineHeight;
-      ctx.fillText("Command: Hire (H)", x + 8, lineY);
+      ctx.fillText("Command: Hire (H)", x + SIDEBAR_PANEL_PADDING, lineY);
     }
     if (canSupplyHere(state, hoveredUnit)) {
       lineY += lineHeight;
-      ctx.fillText("Command: Supply (S)", x + 8, lineY);
+      ctx.fillText("Command: Supply (S)", x + SIDEBAR_PANEL_PADDING, lineY);
     }
     if (canMagicHere(state, hoveredUnit)) {
       lineY += lineHeight;
-      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + 8, lineY);
+      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + SIDEBAR_PANEL_PADDING, lineY);
     }
     if (state.magicError) {
       lineY += lineHeight;
-      ctx.fillText(state.magicError, x + 8, lineY);
+      ctx.fillText(state.magicError, x + SIDEBAR_PANEL_PADDING, lineY);
     }
   }
 };

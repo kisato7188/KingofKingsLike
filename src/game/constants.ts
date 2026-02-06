@@ -16,3 +16,7 @@ export const MENU_TEXT_OFFSET_X = Math.round(10 * UI_SCALE);
 export const MENU_FONT_SIZE = Math.round(14 * UI_SCALE);
 export const CURSOR_STROKE_WIDTH = Math.round(2 * UI_SCALE);
 export const CURSOR_INSET = Math.round(1 * UI_SCALE);
+export const ACTION_LABEL_FONT_SIZE = 18;
+export const SIDEBAR_FONT_SIZE = 21;
+export const SIDEBAR_LINE_HEIGHT = 27;
+export const SIDEBAR_PANEL_PADDING = 8;

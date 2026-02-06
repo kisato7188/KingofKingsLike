@@ -338,7 +338,7 @@ const clamp = (value: number, min: number, max: number): number => {
 
 export const getMovementRange = (state: GameState, unit: Unit): ReachableResult => {
   const enemyZoc = getEnemyZocTiles(state.units, unit.faction, state.map.width, state.map.height);
-  return findReachableTiles({
+  const result = findReachableTiles({
     width: state.map.width,
     height: state.map.height,
     startX: unit.x,
@@ -346,10 +346,17 @@ export const getMovementRange = (state: GameState, unit: Unit): ReachableResult 
     maxCost: unit.movePoints,
     maxSteps: unit.food,
     toIndex: (x, y) => getTileIndex(x, y, state.map.width),
-    isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
+    isPassable: (x, y) => !isOccupiedByEnemy(state, x, y, unit),
     shouldStopAt: (x, y) => isBlockedByZoc(enemyZoc, x, y, unit, state.map.width),
     getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
   });
+  for (const other of state.units) {
+    if (other.id === unit.id || other.faction !== unit.faction) {
+      continue;
+    }
+    result.reachable.delete(getTileIndex(other.x, other.y, state.map.width));
+  }
+  return result;
 };
 
 const buildMovePath = (
@@ -729,6 +736,10 @@ const resolveBattle = (state: GameState, attackerIndex: number, defenderIndex: n
 
 const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): boolean => {
   return state.units.some((unit) => unit.id !== ignoreId && unit.x === x && unit.y === y);
+};
+
+const isOccupiedByEnemy = (state: GameState, x: number, y: number, unit: Unit): boolean => {
+  return state.units.some((other) => other.faction !== unit.faction && other.x === x && other.y === y);
 };
 
 const hasAdjacentEnemy = (state: GameState, unitId: number): boolean => {
