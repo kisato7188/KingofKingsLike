@@ -170,8 +170,9 @@ export class Game {
   }
 
   private getPanLimits(frameSize: number, scaledSize: number): { min: number; max: number } {
-    const min = Math.min(0, frameSize - scaledSize);
-    const max = Math.max(0, frameSize - scaledSize);
+    const overscroll = TILE_SIZE * 2;
+    const min = Math.min(0, frameSize - scaledSize) - overscroll;
+    const max = Math.max(0, frameSize - scaledSize) + overscroll;
     return { min, max };
   }
 
