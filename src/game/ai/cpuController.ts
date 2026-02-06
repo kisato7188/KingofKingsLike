@@ -1,6 +1,20 @@
 import { getTileIndex } from "../geometry";
-import { attackUnit, canOccupy, canSupply, endTurn, GameState, getMovementRange, moveUnitTo, occupyUnit, supply } from "../state";
-import { TileType, Unit } from "../types";
+import {
+  attackUnit,
+  canHireAtCastle,
+  canOccupy,
+  canSupply,
+  endTurn,
+  GameState,
+  getHireSpawnPosition,
+  getMovementRange,
+  hireUnit,
+  moveUnitTo,
+  occupyUnit,
+  supply,
+} from "../state";
+import { TileType, Unit, UnitType } from "../types";
+import { hireableUnits, unitCatalog } from "../unitCatalog";
 
 const isAdjacent = (ax: number, ay: number, bx: number, by: number): boolean => {
   const dx = Math.abs(ax - bx);
@@ -121,6 +135,57 @@ const trySupply = (state: GameState, unitId: number): boolean => {
   return true;
 };
 
+const addHireStep = (state: GameState): boolean => {
+  const actingFaction = state.turn.currentFaction;
+  const factionName = state.factions.find((faction) => faction.id === actingFaction)?.name ?? "Unknown";
+  const kings = state.units.filter((unit) => unit.faction === actingFaction && unit.type === UnitType.King);
+  if (kings.length === 0) {
+    console.debug("CPU Hire: no king for faction", actingFaction);
+    return false;
+  }
+
+  const castleKings = kings.filter((king) => canHireAtCastle(state, king));
+  if (castleKings.length === 0) {
+    console.debug("CPU Hire: no king on castle", actingFaction);
+    return false;
+  }
+
+  const budget = state.budgets[actingFaction] ?? 0;
+  let chosen: UnitType | null = null;
+  let chosenCost = Number.POSITIVE_INFINITY;
+  for (const unitType of hireableUnits) {
+    const entry = unitCatalog[unitType];
+    if (!entry || entry.hireCost > budget) {
+      continue;
+    }
+    if (entry.hireCost < chosenCost) {
+      chosen = unitType;
+      chosenCost = entry.hireCost;
+    }
+  }
+
+  if (!chosen || chosenCost === Number.POSITIVE_INFINITY) {
+    console.debug("CPU Hire: insufficient budget", { faction: actingFaction, budget });
+    return false;
+  }
+
+  for (const king of castleKings) {
+    const spawn = getHireSpawnPosition(state, king);
+    if (!spawn) {
+      console.debug("CPU Hire: no spawn position", { faction: actingFaction, kingId: king.id });
+      continue;
+    }
+    const hired = hireUnit(state, king.id, chosen);
+    if (hired) {
+      console.log(`CPU Hire: ${factionName} hired ${chosen} cost=${chosenCost}`);
+      return true;
+    }
+  }
+
+  console.debug("CPU Hire: hire failed", { faction: actingFaction, unitType: chosen });
+  return false;
+};
+
 export const runCpuTurn = (state: GameState): void => {
   state.selectedUnitId = null;
   state.movementRange = null;
@@ -129,6 +194,7 @@ export const runCpuTurn = (state: GameState): void => {
   state.magicMode = false;
 
   const actingFaction = state.turn.currentFaction;
+  let hiresRemaining = 1;
   const unitIds = state.units
     .filter((unit) => unit.faction === actingFaction)
     .map((unit) => unit.id);
@@ -149,6 +215,10 @@ export const runCpuTurn = (state: GameState): void => {
     if (canOccupy(unit, tile)) {
       occupyUnit(state, unit.id);
       continue;
+    }
+
+    if (hiresRemaining > 0 && addHireStep(state)) {
+      hiresRemaining -= 1;
     }
 
     if (trySupply(state, unit.id)) {
