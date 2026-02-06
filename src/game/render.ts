@@ -110,6 +110,7 @@ export const render = (
 
   drawTiles(ctx, state);
   drawMoveRange(ctx, state);
+  drawAttackRange(ctx, state);
   drawHirePlacement(ctx, state);
   drawZoc(ctx, state);
   drawGrid(ctx, state);
@@ -193,6 +194,32 @@ const drawMoveRange = (ctx: CanvasRenderingContext2D, state: GameState): void =>
     const x = index % state.map.width;
     const y = Math.floor(index / state.map.width);
     const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
+    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+  }
+};
+
+const drawAttackRange = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.attackMode || state.selectedUnitId === null) {
+    return;
+  }
+
+  const attacker = state.units.find((unit) => unit.id === state.selectedUnitId);
+  if (!attacker) {
+    return;
+  }
+
+  ctx.fillStyle = "rgba(255, 88, 88, 0.35)";
+
+  for (const unit of state.units) {
+    if (unit.faction === attacker.faction) {
+      continue;
+    }
+    const dx = Math.abs(unit.x - attacker.x);
+    const dy = Math.abs(unit.y - attacker.y);
+    if (dx + dy !== 1) {
+      continue;
+    }
+    const { x: canvasX, y: canvasY } = boardToCanvas(unit.x, unit.y);
     ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
   }
 };

@@ -49,6 +49,11 @@ export class Game {
   private state: GameState;
   private lastTime = 0;
   private zoom = 1;
+  private panX = 0;
+  private panY = 0;
+  private isPanning = false;
+  private lastPanPosition: { x: number; y: number } | null = null;
+  private lastMousePosition: { x: number; y: number } | null = null;
   private readonly unitAnimations = new Map<number, UnitAnimation>();
   private readonly unitLastPositions = new Map<number, { x: number; y: number }>();
 
@@ -69,6 +74,8 @@ export class Game {
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
     this.canvas.addEventListener("contextmenu", this.handleContextMenu);
     this.canvas.addEventListener("wheel", this.handleWheel, { passive: false });
+    this.canvas.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener("mouseleave", this.handleMouseUp);
 
     for (const unit of this.state.units) {
       this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
@@ -111,6 +118,7 @@ export class Game {
       updateState(this.state, this.input, true);
     }
     this.handleZoomInput();
+    this.handleEdgePan(delta);
     this.input.endFrame();
     this.syncUnitAnimations(previousPositions, delta);
   }
@@ -137,16 +145,89 @@ export class Game {
     this.setZoom(this.zoom - direction * ZOOM_STEP);
   };
 
+  private handleMouseUp = (): void => {
+    this.isPanning = false;
+    this.lastPanPosition = null;
+  };
+
   private setZoom(value: number): void {
     this.zoom = this.clamp(value, MIN_ZOOM, MAX_ZOOM);
+    this.clampPan();
   }
 
   private getMapView(): MapView {
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const offsetX = (mapWidthPx - mapWidthPx * this.zoom) / 2;
-    const offsetY = (mapHeightPx - mapHeightPx * this.zoom) / 2;
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (mapWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (mapHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(mapWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(mapHeightPx, scaledHeight);
+    const offsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
+    const offsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
     return { zoom: this.zoom, offsetX, offsetY };
+  }
+
+  private getPanLimits(frameSize: number, scaledSize: number): { min: number; max: number } {
+    const min = Math.min(0, frameSize - scaledSize);
+    const max = Math.max(0, frameSize - scaledSize);
+    return { min, max };
+  }
+
+  private clampPan(): void {
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (mapWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (mapHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(mapWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(mapHeightPx, scaledHeight);
+    const clampedOffsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
+    const clampedOffsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
+    this.panX = clampedOffsetX - baseOffsetX;
+    this.panY = clampedOffsetY - baseOffsetY;
+  }
+
+  private adjustPan(deltaX: number, deltaY: number): void {
+    this.panX += deltaX;
+    this.panY += deltaY;
+    this.clampPan();
+  }
+
+  private handleEdgePan(delta: number): void {
+    if (!this.lastMousePosition || this.isPanning) {
+      return;
+    }
+
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const edgeThreshold = 24;
+    const speed = 360;
+    const { x, y } = this.lastMousePosition;
+    if (x < 0 || y < 0 || x > mapWidthPx || y > mapHeightPx) {
+      return;
+    }
+
+    let deltaX = 0;
+    let deltaY = 0;
+
+    if (x <= edgeThreshold) {
+      deltaX += speed * delta;
+    } else if (x >= mapWidthPx - edgeThreshold) {
+      deltaX -= speed * delta;
+    }
+
+    if (y <= edgeThreshold) {
+      deltaY += speed * delta;
+    } else if (y >= mapHeightPx - edgeThreshold) {
+      deltaY -= speed * delta;
+    }
+
+    if (deltaX !== 0 || deltaY !== 0) {
+      this.adjustPan(deltaX, deltaY);
+    }
   }
 
   private getScreenPositionFromTile(x: number, y: number): { x: number; y: number } {
@@ -256,6 +337,16 @@ export class Game {
     if (!local) {
       return;
     }
+    this.lastMousePosition = local;
+    if (this.isPanning) {
+      if (this.lastPanPosition) {
+        const deltaX = local.x - this.lastPanPosition.x;
+        const deltaY = local.y - this.lastPanPosition.y;
+        this.adjustPan(deltaX, deltaY);
+      }
+      this.lastPanPosition = local;
+      return;
+    }
     if (this.state.actionMenuOpen) {
       this.updateActionMenuHover(local.x, local.y);
     }
@@ -274,6 +365,16 @@ export class Game {
   };
 
   private handleMouseDown = (event: MouseEvent): void => {
+    if (event.button === 1) {
+      event.preventDefault();
+      const local = this.getLocalPosition(event);
+      if (!local) {
+        return;
+      }
+      this.isPanning = true;
+      this.lastPanPosition = local;
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
