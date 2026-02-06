@@ -1,4 +1,4 @@
-export const TILE_SIZE = 128;
+export const TILE_SIZE = 112;
 export const SIDEBAR_WIDTH = 260;
 export const UI_SCALE = 2;
 
