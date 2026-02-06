@@ -48,7 +48,13 @@ const getUnitImage = (unitType: UnitType): UnitImageState => {
   return state;
 };
 
-export const render = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+export type UnitDrawPositions = Map<number, { x: number; y: number }>;
+
+export const render = (
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  unitDrawPositions?: UnitDrawPositions,
+): void => {
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
 
@@ -59,7 +65,7 @@ export const render = (ctx: CanvasRenderingContext2D, state: GameState): void =>
   drawHirePlacement(ctx, state);
   drawZoc(ctx, state);
   drawGrid(ctx, state);
-  drawUnits(ctx, state);
+  drawUnits(ctx, state, unitDrawPositions);
   drawCursor(ctx, state);
   drawGlobalInfo(ctx, state);
   drawUnitInfo(ctx, state);
@@ -175,9 +181,14 @@ const drawZoc = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   }
 };
 
-const drawUnits = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+const drawUnits = (
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  unitDrawPositions?: UnitDrawPositions,
+): void => {
   for (const unit of state.units) {
-    const { x: canvasX, y: canvasY } = boardToCanvas(unit.x, unit.y);
+    const drawPosition = unitDrawPositions?.get(unit.id) ?? { x: unit.x, y: unit.y };
+    const { x: canvasX, y: canvasY } = boardToCanvas(drawPosition.x, drawPosition.y);
     const color = getFactionColor(state, unit.faction);
     const size = 18;
     const offset = (TILE_SIZE - size) / 2;

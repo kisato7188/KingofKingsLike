@@ -1,6 +1,6 @@
 import { Input } from "./Input";
 import { getViewportHeight, getViewportWidth } from "./geometry";
-import { render } from "./render";
+import { render, UnitDrawPositions } from "./render";
 import { TILE_SIZE } from "./constants";
 import {
   applyActionMenuSelection,
@@ -19,12 +19,26 @@ import {
 import { runCpuTurn } from "./ai/cpuController";
 import { hireableUnits } from "./unitCatalog";
 
+type UnitAnimation = {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  elapsed: number;
+  duration: number;
+};
+
+const MOVE_SECONDS_PER_TILE = 0.3;
+const MIN_MOVE_DURATION = 0.05;
+
 export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly input: Input;
   private state: GameState;
   private lastTime = 0;
+  private readonly unitAnimations = new Map<number, UnitAnimation>();
+  private readonly unitLastPositions = new Map<number, { x: number; y: number }>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -42,6 +56,10 @@ export class Game {
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
     this.canvas.addEventListener("contextmenu", this.handleContextMenu);
+
+    for (const unit of this.state.units) {
+      this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+    }
   }
 
   start(): void {
@@ -67,7 +85,8 @@ export class Game {
     requestAnimationFrame(this.loop);
   };
 
-  private update(_delta: number): void {
+  private update(delta: number): void {
+    const previousPositions = new Map(this.unitLastPositions);
     const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
     if (controller === "CPU") {
       updateState(this.state, this.input, false);
@@ -79,10 +98,67 @@ export class Game {
       updateState(this.state, this.input, true);
     }
     this.input.endFrame();
+    this.syncUnitAnimations(previousPositions, delta);
   }
 
   private render(): void {
-    render(this.ctx, this.state);
+    render(this.ctx, this.state, this.getUnitDrawPositions());
+  }
+
+  private syncUnitAnimations(previousPositions: Map<number, { x: number; y: number }>, delta: number): void {
+    for (const [unitId, anim] of this.unitAnimations.entries()) {
+      anim.elapsed += delta;
+      if (anim.elapsed >= anim.duration) {
+        this.unitAnimations.delete(unitId);
+      }
+    }
+
+    const seenUnits = new Set<number>();
+
+    for (const unit of this.state.units) {
+      seenUnits.add(unit.id);
+      const previous = previousPositions.get(unit.id);
+      if (!previous) {
+        this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+        continue;
+      }
+      if (previous.x !== unit.x || previous.y !== unit.y) {
+        const distance = Math.abs(unit.x - previous.x) + Math.abs(unit.y - previous.y);
+        const duration = Math.max(MIN_MOVE_DURATION, distance * MOVE_SECONDS_PER_TILE);
+        this.unitAnimations.set(unit.id, {
+          fromX: previous.x,
+          fromY: previous.y,
+          toX: unit.x,
+          toY: unit.y,
+          elapsed: 0,
+          duration,
+        });
+      }
+      this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+    }
+
+    for (const unitId of Array.from(this.unitLastPositions.keys())) {
+      if (!seenUnits.has(unitId)) {
+        this.unitLastPositions.delete(unitId);
+        this.unitAnimations.delete(unitId);
+      }
+    }
+  }
+
+  private getUnitDrawPositions(): UnitDrawPositions {
+    const positions: UnitDrawPositions = new Map();
+    for (const unit of this.state.units) {
+      const anim = this.unitAnimations.get(unit.id);
+      if (!anim) {
+        positions.set(unit.id, { x: unit.x, y: unit.y });
+        continue;
+      }
+      const progress = Math.min(1, anim.elapsed / anim.duration);
+      const x = anim.fromX + (anim.toX - anim.fromX) * progress;
+      const y = anim.fromY + (anim.toY - anim.fromY) * progress;
+      positions.set(unit.id, { x, y });
+    }
+    return positions;
   }
 
   private handleMouseMove = (event: MouseEvent): void => {
