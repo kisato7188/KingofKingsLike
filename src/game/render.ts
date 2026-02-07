@@ -5,8 +5,10 @@ import {
   canOccupy,
   canSupply,
   getActionMenuOptions,
+  getAttackRange,
   getEnemyZocTiles,
   getHirePlacementPositions,
+  isInAttackRange,
 } from "./state";
 import {
   ACTION_MENU_WIDTH,
@@ -55,6 +57,7 @@ type TileImageState = {
 };
 
 const unitImageCache = new Map<UnitType, UnitImageState>();
+const unitTintCache = new Map<string, HTMLCanvasElement>();
 const tileImageCache = new Map<TileType, TileImageState>();
 
 const tileImageFiles: Record<TileType, string> = {
@@ -91,6 +94,36 @@ const getUnitImage = (unitType: UnitType): UnitImageState => {
 
   unitImageCache.set(unitType, state);
   return state;
+};
+
+const getTintedUnitImage = (unitType: UnitType, tintColor: string): HTMLCanvasElement | null => {
+  const key = `${unitType}-${tintColor}`;
+  const cached = unitTintCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const imageState = getUnitImage(unitType);
+  if (!imageState.loaded || imageState.failed) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = imageState.image.width;
+  canvas.height = imageState.image.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+
+  ctx.drawImage(imageState.image, 0, 0);
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = tintColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = "source-over";
+
+  unitTintCache.set(key, canvas);
+  return canvas;
 };
 
 const getTileImage = (tileType: TileType): TileImageState => {
@@ -144,9 +177,12 @@ const drawUiEffect = (
   }
 
   const { effect, elapsed, duration } = effectState;
+  if (effect.kind === "hire") {
+    return;
+  }
   const frameWidth = getMapFrameWidth();
   const frameHeight = getMapFrameHeight();
-  const bandHeight = Math.round(TILE_SIZE * 1.2);
+  const bandHeight = Math.round(TILE_SIZE * (effect.kind === "attack" ? 2.6 : 1.2));
   const bandY = Math.round((frameHeight - bandHeight) / 2);
 
   const inDuration = duration * 0.25;
@@ -173,21 +209,28 @@ const drawUiEffect = (
   const centerY = bandY + bandHeight / 2;
 
   if (effect.kind === "turn") {
+    ctx.fillStyle = effect.color;
     ctx.fillText(effect.label, textX, centerY);
     return;
   }
 
   if (effect.kind === "occupy") {
+    ctx.fillStyle = effect.color;
     ctx.fillText(effect.label, textX, centerY);
     return;
   }
 
   ctx.fillText("Attack!", textX, centerY);
 
+  const showPortraits = elapsed < inDuration + holdDuration;
+  if (!showPortraits) {
+    return;
+  }
+
   const attackerImage = getUnitImage(effect.attackerType);
   const defenderImage = getUnitImage(effect.defenderType);
-  const portraitSize = Math.round(TILE_SIZE * 0.95);
-  const portraitY = bandY + bandHeight - portraitSize;
+  const portraitSize = Math.round(TILE_SIZE * 1.9);
+  const portraitY = bandY + Math.round(bandHeight * 0.1);
   const leftX = Math.round(frameWidth * 0.18 - portraitSize / 2);
   const rightX = Math.round(frameWidth * 0.82 - portraitSize / 2);
 
@@ -210,6 +253,43 @@ const drawUiEffect = (
     ctx.font = `${Math.round(TILE_SIZE * 0.3)}px 'Noto Sans JP', sans-serif`;
     ctx.fillText(effect.defenderType, rightX + portraitSize / 2, portraitY + portraitSize / 2);
   }
+
+  ctx.fillStyle = "#e7e7e7";
+  ctx.font = `${Math.round(TILE_SIZE * 0.22)}px 'Noto Sans JP', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  const hpTextY = portraitY + portraitSize + Math.round(TILE_SIZE * 0.08);
+  ctx.fillText(
+    `HP：${effect.attackerHpBefore}→${effect.attackerHpAfter}`,
+    leftX + portraitSize / 2,
+    hpTextY,
+  );
+  ctx.fillText(
+    `HP：${effect.defenderHpBefore}→${effect.defenderHpAfter}`,
+    rightX + portraitSize / 2,
+    hpTextY,
+  );
+};
+
+const drawHireFlash = (
+  ctx: CanvasRenderingContext2D,
+  effectState: { effect: UiEffect; elapsed: number; duration: number } | null,
+): void => {
+  if (!effectState || effectState.effect.kind !== "hire") {
+    return;
+  }
+
+  const { effect, elapsed, duration } = effectState;
+  const totalBlinks = 3;
+  const interval = duration / (totalBlinks * 2);
+  const phase = Math.floor(elapsed / interval);
+  if (phase % 2 !== 0) {
+    return;
+  }
+
+  const { x: canvasX, y: canvasY } = boardToCanvas(effect.x, effect.y);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+  ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
 };
 
 export const render = (
@@ -246,6 +326,7 @@ export const render = (
   drawZoc(ctx, state);
   drawGrid(ctx, state);
   drawUnits(ctx, state, unitDrawPositions, animatingUnits);
+  drawHireFlash(ctx, effectState ?? null);
   drawCursor(ctx, state);
   ctx.restore();
 
@@ -253,8 +334,10 @@ export const render = (
   drawContextMenu(ctx, state, view);
   drawHireMenu(ctx, state);
   drawGlobalInfo(ctx, state);
+  drawEnemyBudget(ctx, state);
   drawUnitInfo(ctx, state);
   drawUiEffect(ctx, state, effectState ?? null);
+  drawIncomeResult(ctx, state);
 };
 
 const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
@@ -348,17 +431,21 @@ const drawAttackRange = (ctx: CanvasRenderingContext2D, state: GameState): void 
 
   ctx.fillStyle = "rgba(255, 88, 88, 0.35)";
 
-  for (const unit of state.units) {
-    if (unit.faction === attacker.faction) {
+  const range = getAttackRange(attacker);
+  for (let y = attacker.y - range; y <= attacker.y + range; y += 1) {
+    if (y < 0 || y >= state.map.height) {
       continue;
     }
-    const dx = Math.abs(unit.x - attacker.x);
-    const dy = Math.abs(unit.y - attacker.y);
-    if (dx + dy !== 1) {
-      continue;
+    for (let x = attacker.x - range; x <= attacker.x + range; x += 1) {
+      if (x < 0 || x >= state.map.width) {
+        continue;
+      }
+      if (!isInAttackRange(attacker, x, y)) {
+        continue;
+      }
+      const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
+      ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
     }
-    const { x: canvasX, y: canvasY } = boardToCanvas(unit.x, unit.y);
-    ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
   }
 };
 
@@ -411,6 +498,10 @@ const drawUnits = (
     const spriteShiftY = Math.round(spriteSize * 0.25);
     const spriteX = canvasX + TILE_SIZE / 2 - spriteSize / 2;
     const spriteY = canvasY - spriteShiftY;
+    const outlineSize = Math.round(spriteSize * 1.06);
+    const outlineOffset = (outlineSize - spriteSize) / 2;
+    const outlineX = spriteX - outlineOffset;
+    const outlineY = spriteY - outlineOffset;
     const fallbackSize = Math.round(TILE_SIZE * 0.22);
     const fallbackShiftY = Math.round(fallbackSize * 0.25);
     const fallbackX = canvasX + TILE_SIZE / 2 - fallbackSize / 2;
@@ -418,8 +509,12 @@ const drawUnits = (
 
     const imageState = getUnitImage(unit.type);
     if (imageState.loaded && !imageState.failed) {
+      const tinted = getTintedUnitImage(unit.type, color);
       const smoothing = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
+      if (tinted) {
+        ctx.drawImage(tinted, outlineX, outlineY, outlineSize, outlineSize);
+      }
       ctx.drawImage(imageState.image, spriteX, spriteY, spriteSize, spriteSize);
       ctx.imageSmoothingEnabled = smoothing;
     } else {
@@ -443,6 +538,28 @@ const drawUnits = (
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(getLevelLabel(unit), canvasX + 4, canvasY + 4);
+
+    const controller = state.config.controllers[unit.faction] ?? "Human";
+    const isPlayer = controller === "Human";
+    const badgeText = isPlayer ? "P" : "E";
+    ctx.font = "18px 'Noto Sans JP', sans-serif";
+    const badgeWidth = ctx.measureText(badgeText).width;
+    const badgeHeight = 18;
+    const badgePaddingX = 6;
+    const badgePaddingY = 2;
+    const badgeRight = canvasX + TILE_SIZE - 4;
+    const badgeTop = canvasY + 4;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(
+      badgeRight - badgeWidth - badgePaddingX * 2,
+      badgeTop - badgePaddingY,
+      badgeWidth + badgePaddingX * 2,
+      badgeHeight + badgePaddingY * 2,
+    );
+    ctx.fillStyle = isPlayer ? "#4dabf7" : "#ff6b6b";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillText(badgeText, badgeRight - badgePaddingX, badgeTop);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "18px 'Noto Sans JP', sans-serif";
@@ -570,7 +687,7 @@ const drawGlobalInfo = (ctx: CanvasRenderingContext2D, state: GameState): void =
   const viewportWidth = getViewportWidth(state.map);
   const x = viewportWidth - panelWidth;
   const y = 0;
-  const height = 270;
+  const height = 200;
 
   ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
   ctx.fillRect(x, y, panelWidth, height);
@@ -583,24 +700,40 @@ const drawGlobalInfo = (ctx: CanvasRenderingContext2D, state: GameState): void =
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
 
-  const faction = state.factions[state.turn.factionIndex];
-  const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
+  const tile = state.map.tiles[getTileIndex(state.cursor.x, state.cursor.y, state.map.width)];
+  const terrainLabel = getTerrainLabel(tile.type);
+  const defensePercent = getTerrainDefensePercent(tile.type);
 
   let lineY = y + SIDEBAR_PANEL_PADDING;
   const lineHeight = SIDEBAR_LINE_HEIGHT;
 
-  ctx.fillText(`Cursor: (${state.cursor.x}, ${state.cursor.y})`, x + SIDEBAR_PANEL_PADDING, lineY);
+  ctx.fillText(`座標：(${state.cursor.x}, ${state.cursor.y})`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText(`Round: ${state.turn.roundCount}`, x + SIDEBAR_PANEL_PADDING, lineY);
+  ctx.fillText(`ターン：${state.turn.roundCount}`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText("Faction:", x + SIDEBAR_PANEL_PADDING, lineY);
-  ctx.fillStyle = getFactionColor(state, state.turn.currentFaction);
-  ctx.fillText(faction.name, x + SIDEBAR_PANEL_PADDING + 64, lineY);
-  ctx.fillStyle = "#e7e7e7";
+  ctx.fillText(`資金：${state.budgets[state.turn.currentFaction] ?? 0}`, x + SIDEBAR_PANEL_PADDING, lineY);
   lineY += lineHeight;
-  ctx.fillText(`Ctrl: ${controller} (1-4)`, x + SIDEBAR_PANEL_PADDING, lineY);
-  lineY += lineHeight;
-  ctx.fillText(`Budget: ${state.budgets[state.turn.currentFaction] ?? 0}`, x + SIDEBAR_PANEL_PADDING, lineY);
+  ctx.fillText(`地形：${terrainLabel}（防御効果${defensePercent}%）`, x + SIDEBAR_PANEL_PADDING, lineY);
+  if (tile.type === TileType.Town) {
+    lineY += lineHeight;
+    const owner = tile.ownerFaction;
+    let ownerLabel = "なし";
+    if (owner !== undefined && owner !== null) {
+      const controller = state.config.controllers[owner] ?? "Human";
+      ownerLabel = controller === "Human" ? "プレイヤー" : "エネミー";
+    }
+    const prefix = "所属：";
+    ctx.fillStyle = "#e7e7e7";
+    ctx.fillText(prefix, x + SIDEBAR_PANEL_PADDING, lineY);
+    let ownerColor = "#e7e7e7";
+    if (owner !== undefined && owner !== null) {
+      const controller = state.config.controllers[owner] ?? "Human";
+      ownerColor = controller === "Human" ? "#4dabf7" : "#ff6b6b";
+    }
+    const prefixWidth = ctx.measureText(prefix).width;
+    ctx.fillStyle = ownerColor;
+    ctx.fillText(ownerLabel, x + SIDEBAR_PANEL_PADDING + prefixWidth, lineY);
+  }
 };
 
 const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => {
@@ -627,39 +760,110 @@ const drawUnitInfo = (ctx: CanvasRenderingContext2D, state: GameState): void => 
   let lineY = y + SIDEBAR_PANEL_PADDING;
   const lineHeight = SIDEBAR_LINE_HEIGHT;
 
-  ctx.fillText(`Unit: ${hoveredUnit ? hoveredUnit.type : "None"}`, x + SIDEBAR_PANEL_PADDING, lineY);
   if (hoveredUnit) {
+    const controller = state.config.controllers[hoveredUnit.faction] ?? "Human";
+    const isPlayer = controller === "Human";
+    const typeLabel = unitCatalog[hoveredUnit.type]?.name ?? hoveredUnit.type;
+
+    ctx.fillStyle = isPlayer ? "#4dabf7" : "#ff6b6b";
+    ctx.fillText(isPlayer ? "プレイヤー" : "エネミー", x + SIDEBAR_PANEL_PADDING, lineY);
+
+    ctx.fillStyle = "#e7e7e7";
     lineY += lineHeight;
-    ctx.fillText(`Food: ${hoveredUnit.food}/${hoveredUnit.maxFood}`, x + SIDEBAR_PANEL_PADDING, lineY);
+    ctx.fillText(`タイプ：${typeLabel}`, x + SIDEBAR_PANEL_PADDING, lineY);
     lineY += lineHeight;
-    ctx.fillText(`HP: ${hoveredUnit.hp}/${hoveredUnit.maxHp}`, x + SIDEBAR_PANEL_PADDING, lineY);
+    ctx.fillText(`レベル：${getLevelLabel(hoveredUnit)}`, x + SIDEBAR_PANEL_PADDING, lineY);
     lineY += lineHeight;
-    ctx.fillText(`LV: ${getLevelLabel(hoveredUnit)}  EXP: ${hoveredUnit.exp}`, x + SIDEBAR_PANEL_PADDING, lineY);
-    if (hasAdjacentEnemy(state, hoveredUnit)) {
-      lineY += lineHeight;
-      ctx.fillText(state.attackMode ? "Attack: Select target" : "Command: Attack (A)", x + SIDEBAR_PANEL_PADDING, lineY);
-    }
-    if (canOccupyHere(state, hoveredUnit)) {
-      lineY += lineHeight;
-      ctx.fillText("Command: Occupy (O)", x + SIDEBAR_PANEL_PADDING, lineY);
-    }
-    if (canHireHere(state, hoveredUnit)) {
-      lineY += lineHeight;
-      ctx.fillText("Command: Hire (H)", x + SIDEBAR_PANEL_PADDING, lineY);
-    }
-    if (canSupplyHere(state, hoveredUnit)) {
-      lineY += lineHeight;
-      ctx.fillText("Command: Supply (S)", x + SIDEBAR_PANEL_PADDING, lineY);
-    }
-    if (canMagicHere(state, hoveredUnit)) {
-      lineY += lineHeight;
-      ctx.fillText(state.magicMode ? "Magic: Select target" : "Command: Magic (M)", x + SIDEBAR_PANEL_PADDING, lineY);
-    }
-    if (state.magicError) {
-      lineY += lineHeight;
-      ctx.fillText(state.magicError, x + SIDEBAR_PANEL_PADDING, lineY);
-    }
+    ctx.fillText(`EXP：${hoveredUnit.exp}`, x + SIDEBAR_PANEL_PADDING, lineY);
+    lineY += lineHeight;
+    ctx.fillText(`食料：${hoveredUnit.food}`, x + SIDEBAR_PANEL_PADDING, lineY);
   }
+};
+
+const drawEnemyBudget = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const enemyFaction = state.factions.find((faction) => {
+    const controller = state.config.controllers[faction.id] ?? "Human";
+    return controller === "CPU";
+  })?.id;
+
+  if (enemyFaction === undefined) {
+    return;
+  }
+
+  const panelWidth = SIDEBAR_WIDTH;
+  const viewportWidth = getViewportWidth(state.map);
+  const viewportHeight = getViewportHeight(state.map);
+  const x = viewportWidth - panelWidth;
+  const topHeight = 200;
+  const bottomHeight = 330;
+  const gapTop = topHeight;
+  const gapBottom = viewportHeight - bottomHeight;
+  if (gapBottom <= gapTop) {
+    return;
+  }
+
+  const y = Math.round((gapTop + gapBottom) / 2 - SIDEBAR_LINE_HEIGHT / 2);
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.82)";
+  ctx.fillRect(x, y - 6, panelWidth, SIDEBAR_LINE_HEIGHT + 12);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.strokeRect(x, y - 6, panelWidth, SIDEBAR_LINE_HEIGHT + 12);
+
+  ctx.fillStyle = "#e7e7e7";
+  ctx.font = `${SIDEBAR_FONT_SIZE}px 'Noto Sans JP', sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText(`エネミー資金：${state.budgets[enemyFaction] ?? 0}`, x + SIDEBAR_PANEL_PADDING, y);
+};
+
+const drawIncomeResult = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  if (!state.incomeResult) {
+    return;
+  }
+
+  const frameWidth = getMapFrameWidth();
+  const frameHeight = getMapFrameHeight();
+  const panelWidth = Math.min(520, frameWidth - 80);
+  const panelHeight = 240;
+  const panelX = Math.round((frameWidth - panelWidth) / 2);
+  const panelY = Math.round((frameHeight - panelHeight) / 2);
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.fillRect(0, 0, frameWidth, frameHeight);
+
+  ctx.fillStyle = "rgba(15, 17, 22, 0.92)";
+  ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+  const result = state.incomeResult;
+  const lineHeight = Math.round(SIDEBAR_LINE_HEIGHT * 1.05);
+  let lineY = panelY + 22;
+
+  const controller = state.config.controllers[result.factionId] ?? "Human";
+  const isPlayer = controller === "Human";
+  ctx.font = `${Math.round(SIDEBAR_FONT_SIZE * 1.05)}px 'Noto Sans JP', sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = isPlayer ? "#4dabf7" : "#ff6b6b";
+  ctx.fillText(isPlayer ? "プレイヤー" : "エネミー", panelX + 24, lineY);
+
+  lineY += lineHeight;
+  ctx.fillStyle = "#e7e7e7";
+  ctx.fillText("■■ターンリザルト■■", panelX + 24, lineY);
+
+  lineY += lineHeight * 1.3;
+  ctx.fillText(`城×${result.castles}  +${result.castles * result.incomePerCastle}`, panelX + 24, lineY);
+  lineY += lineHeight;
+  ctx.fillText(`街×${result.towns}  +${result.towns * result.incomePerTown}`, panelX + 24, lineY);
+
+  lineY += lineHeight * 1.2;
+  ctx.fillText(`資金  ${result.before}  →  ${result.after}`, panelX + 24, lineY);
+
+  ctx.fillStyle = "rgba(231, 231, 231, 0.7)";
+  ctx.font = `${Math.round(SIDEBAR_FONT_SIZE * 0.9)}px 'Noto Sans JP', sans-serif`;
+  ctx.textAlign = "right";
+  ctx.fillText("クリックで続行", panelX + panelWidth - 24, panelY + panelHeight - 28);
 };
 
 const getTileColor = (type: TileType): string => {
@@ -678,6 +882,40 @@ const getTileColor = (type: TileType): string => {
       return "#6b6b6b";
     default:
       return "#3c7a3f";
+  }
+};
+
+const getTerrainLabel = (type: TileType): string => {
+  switch (type) {
+    case TileType.Grass:
+      return "草原";
+    case TileType.Road:
+      return "道路";
+    case TileType.Forest:
+      return "森";
+    case TileType.Mountain:
+      return "山";
+    case TileType.Town:
+      return "町";
+    case TileType.Castle:
+      return "城";
+    default:
+      return "草原";
+  }
+};
+
+const getTerrainDefensePercent = (type: TileType): number => {
+  switch (type) {
+    case TileType.Forest:
+    case TileType.Town:
+      return 10;
+    case TileType.Mountain:
+    case TileType.Castle:
+      return 20;
+    case TileType.Grass:
+    case TileType.Road:
+    default:
+      return 0;
   }
 };
 

@@ -12,15 +12,15 @@ export type Spell = {
 
 export const spells: Spell[] = [
   {
-    id: "heal",
-    name: "Heal",
-    targetType: "ally",
+    id: "blast",
+    name: "Blast",
+    targetType: "enemy",
     range: 3,
     effect: (_caster, target) => {
-      const amount = 8;
+      const amount = 6;
       return {
         ...target,
-        hp: Math.min(target.maxHp, target.hp + amount),
+        hp: Math.max(0, target.hp - amount),
       };
     },
   },

@@ -29,7 +29,7 @@ export const battle = (attacker: Unit, defender: Unit, map: MapData, config: Bat
   defenderAfter.hp -= firstDamage;
   log.push(`${attackerAfter.type} attacks ${defenderAfter.type} (${firstDamage} dmg)`);
 
-  if (defenderAfter.hp > 0) {
+  if (defenderAfter.hp > 0 && canCounterattack(attackerAfter, defenderAfter)) {
     const counterDamage = calcDamage(defenderAfter, attackerAfter, map, config, true);
     attackerAfter.hp -= counterDamage;
     log.push(`${defenderAfter.type} counterattacks ${attackerAfter.type} (${counterDamage} dmg)`);
@@ -42,6 +42,23 @@ export const battle = (attacker: Unit, defender: Unit, map: MapData, config: Bat
     defenderDefeated: defenderAfter.hp <= 0,
     log,
   };
+};
+
+const canCounterattack = (attacker: Unit, defender: Unit): boolean => {
+  const range = getAttackRange(defender);
+  const dx = Math.abs(defender.x - attacker.x);
+  const dy = Math.abs(defender.y - attacker.y);
+  if (dx === 0 && dy === 0) {
+    return false;
+  }
+  return dx + dy <= range;
+};
+
+const getAttackRange = (unit: Unit): number => {
+  if (unit.type === UnitType.Archer || unit.type === UnitType.Mage || unit.type === UnitType.Wizard) {
+    return 3;
+  }
+  return 1;
 };
 
 const calcDamage = (attacker: Unit, defender: Unit, map: MapData, config: BattleConfig, isCounter = false): number => {

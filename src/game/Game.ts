@@ -18,6 +18,7 @@ import {
   applyHireMenuSelection,
   canHireUnitType,
   clearSelection,
+  confirmIncomeResult,
   createInitialState,
   endTurn,
   getActionMenuOptions,
@@ -57,6 +58,8 @@ export class Game {
   private panY = 0;
   private activeEffect: UiEffect | null = null;
   private effectElapsed = 0;
+  private activeEffectDuration = EFFECT_DURATION;
+  private effectCooldown = 0;
   private isPanning = false;
   private lastPanPosition: { x: number; y: number } | null = null;
   private cpuActionCooldown = 0;
@@ -134,8 +137,15 @@ export class Game {
   private update(delta: number): void {
     const previousPositions = new Map(this.unitLastPositions);
     const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller === "CPU" && this.state.incomeResult) {
+      confirmIncomeResult(this.state);
+    }
     const effectBlocking =
-      this.activeEffect !== null || this.state.uiEffects.length > 0 || this.unitAnimations.size > 0;
+      this.activeEffect !== null ||
+      this.state.uiEffects.length > 0 ||
+      this.unitAnimations.size > 0 ||
+      this.state.incomeResult !== null ||
+      this.effectCooldown > 0;
     if (controller === "CPU") {
       this.autoMode = false;
       updateState(this.state, this.input, false);
@@ -143,9 +153,16 @@ export class Game {
       if (updated === "CPU") {
         this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
         if (!effectBlocking && this.cpuActionCooldown <= 0) {
-          const result = runCpuTurnStep(this.state);
+          const result = runCpuTurnStep(this.state, {
+            lockKingOnCastle: true,
+          });
           if (result.focusUnitId !== undefined) {
             this.cpuFocusUnitId = result.focusUnitId;
+            const focusUnit = this.state.units.find((unit) => unit.id === result.focusUnitId);
+            if (focusUnit) {
+              this.state.cursor.x = focusUnit.x;
+              this.state.cursor.y = focusUnit.y;
+            }
           }
           if (result.acted) {
             this.cpuActionCooldown = CPU_STEP_DELAY;
@@ -164,6 +181,7 @@ export class Game {
             factionId: this.state.turn.currentFaction,
             skipUnit: (unit) => unit.type === UnitType.King,
             allowEndTurn: false,
+            allowHire: false,
           });
           if (result.focusUnitId !== undefined) {
             this.cpuFocusUnitId = result.focusUnitId;
@@ -220,12 +238,17 @@ export class Game {
   }
 
   private updateEffects(delta: number): void {
+    if (this.effectCooldown > 0) {
+      this.effectCooldown = Math.max(0, this.effectCooldown - delta);
+      return;
+    }
     if (this.unitAnimations.size > 0) {
       return;
     }
     if (!this.activeEffect && this.state.uiEffects.length > 0) {
       this.activeEffect = this.state.uiEffects.shift() ?? null;
       this.effectElapsed = 0;
+      this.activeEffectDuration = this.activeEffect ? this.getEffectDuration(this.activeEffect) : EFFECT_DURATION;
     }
 
     if (!this.activeEffect) {
@@ -233,9 +256,13 @@ export class Game {
     }
 
     this.effectElapsed += delta;
-    if (this.effectElapsed >= EFFECT_DURATION) {
+    if (this.effectElapsed >= this.activeEffectDuration) {
+      if (this.activeEffect?.kind === "attack") {
+        this.effectCooldown = 1;
+      }
       this.activeEffect = null;
       this.effectElapsed = 0;
+      this.activeEffectDuration = EFFECT_DURATION;
     }
   }
 
@@ -243,7 +270,14 @@ export class Game {
     if (!this.activeEffect) {
       return null;
     }
-    return { effect: this.activeEffect, elapsed: this.effectElapsed, duration: EFFECT_DURATION };
+    return { effect: this.activeEffect, elapsed: this.effectElapsed, duration: this.activeEffectDuration };
+  }
+
+  private getEffectDuration(effect: UiEffect): number {
+    if (effect.kind === "hire") {
+      return 0.6;
+    }
+    return EFFECT_DURATION;
   }
 
   private handleZoomInput(): void {
@@ -328,6 +362,11 @@ export class Game {
     const position = this.getUnitDrawPosition(this.cpuFocusUnitId);
     if (!position) {
       return;
+    }
+    const focusUnit = this.state.units.find((unit) => unit.id === this.cpuFocusUnitId);
+    if (focusUnit) {
+      this.state.cursor.x = focusUnit.x;
+      this.state.cursor.y = focusUnit.y;
     }
     this.centerOnMapPosition(position.x * TILE_SIZE + TILE_SIZE / 2, position.y * TILE_SIZE + TILE_SIZE / 2);
   }
@@ -514,6 +553,9 @@ export class Game {
       return;
     }
     this.lastMousePosition = local;
+    if (this.state.incomeResult) {
+      return;
+    }
     if (this.isPanning) {
       if (this.lastPanPosition) {
         const deltaX = local.x - this.lastPanPosition.x;
@@ -541,6 +583,16 @@ export class Game {
   };
 
   private handleMouseDown = (event: MouseEvent): void => {
+    if (this.state.incomeResult) {
+      if (event.button === 0) {
+        confirmIncomeResult(this.state);
+      }
+    if (this.autoMode) {
+      this.lastMousePosition = local;
+      return;
+    }
+      return;
+    }
     if (event.button === 1) {
       event.preventDefault();
       const local = this.getLocalPosition(event);
