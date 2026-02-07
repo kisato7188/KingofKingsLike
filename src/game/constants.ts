@@ -1,6 +1,6 @@
 export const TILE_SIZE = 112;
 export const VIEW_TILES_X = 14;
-export const VIEW_TILES_Y = 6;
+export const VIEW_TILES_Y = 7;
 export const SIDEBAR_WIDTH = 260;
 export const UI_SCALE = 2;
 
