@@ -1,11 +1,11 @@
 import { FactionId, Scenario, Tile, TileType, UnitType } from "../game/types";
 import { getTileIndex } from "../game/geometry";
 
-const width = 80;
-const height = 80;
+const width = 40;
+const height = 40;
 
-const blueCastle = { x: 6, y: 6 };
-const redCastle = { x: 73, y: 73 };
+const blueCastle = { x: 4, y: 4 };
+const redCastle = { x: 35, y: 35 };
 
 const tiles: Tile[] = Array.from({ length: width * height }, () => ({ type: TileType.Grass }));
 
@@ -47,9 +47,9 @@ const drawRoute = (points: Array<{ x: number; y: number }>): void => {
   }
 };
 
-const route1 = [blueCastle, { x: 40, y: 40 }, redCastle];
-const route2 = [blueCastle, { x: 40, y: 12 }, redCastle];
-const route3 = [blueCastle, { x: 12, y: 68 }, redCastle];
+const route1 = [blueCastle, { x: 20, y: 20 }, redCastle];
+const route2 = [blueCastle, { x: 20, y: 8 }, redCastle];
+const route3 = [blueCastle, { x: 8, y: 30 }, redCastle];
 
 [route1, route2, route3].forEach(drawRoute);
 
@@ -57,18 +57,21 @@ setTile(blueCastle.x, blueCastle.y, TileType.Castle, FactionId.Blue);
 setTile(redCastle.x, redCastle.y, TileType.Castle, FactionId.Red);
 
 const townsOnRoutes = [
-  { x: 24, y: 24 },
-  { x: 56, y: 56 },
-  { x: 30, y: 6 },
-  { x: 60, y: 12 },
-  { x: 12, y: 40 },
-  { x: 40, y: 68 },
+  { x: 12, y: 12 },
+  { x: 28, y: 28 },
+  { x: 16, y: 4 },
+  { x: 30, y: 8 },
+  { x: 8, y: 20 },
+  { x: 20, y: 30 },
+  { x: 24, y: 20 },
+  { x: 12, y: 28 },
 ];
 
 const townsOffRoutes = [
-  { x: 10, y: 20 },
-  { x: 70, y: 30 },
-  { x: 30, y: 70 },
+  { x: 6, y: 16 },
+  { x: 32, y: 16 },
+  { x: 18, y: 34 },
+  { x: 34, y: 6 },
 ];
 
 [...townsOnRoutes, ...townsOffRoutes].forEach((town) => {
@@ -76,8 +79,8 @@ const townsOffRoutes = [
 });
 
 const forestRings = [
-  { center: { x: 30, y: 70 }, radius: 2 },
-  { center: { x: 10, y: 20 }, radius: 2 },
+  { center: { x: 18, y: 34 }, radius: 2 },
+  { center: { x: 6, y: 16 }, radius: 2 },
 ];
 
 for (const ring of forestRings) {
@@ -97,9 +100,9 @@ for (const ring of forestRings) {
 }
 
 const forestClusters = [
-  { x: 18, y: 46, w: 6, h: 5 },
-  { x: 46, y: 20, w: 7, h: 6 },
-  { x: 60, y: 48, w: 6, h: 6 },
+  { x: 10, y: 22, w: 6, h: 5 },
+  { x: 24, y: 12, w: 7, h: 6 },
+  { x: 28, y: 24, w: 6, h: 6 },
 ];
 
 for (const cluster of forestClusters) {
@@ -110,19 +113,19 @@ for (const cluster of forestClusters) {
   }
 }
 
-const mountainRidgeY = { start: 14, end: 64, gapStart: 36, gapEnd: 40 };
+const mountainRidgeY = { start: 8, end: 32, gapStart: 18, gapEnd: 20 };
 for (let y = mountainRidgeY.start; y <= mountainRidgeY.end; y += 1) {
   if (y >= mountainRidgeY.gapStart && y <= mountainRidgeY.gapEnd) {
     continue;
   }
-  setTerrainIfGrass(38, y, TileType.Mountain);
-  setTerrainIfGrass(39, y, TileType.Mountain);
+  setTerrainIfGrass(20, y, TileType.Mountain);
+  setTerrainIfGrass(21, y, TileType.Mountain);
 }
 
 const mountainClusters = [
-  { x: 52, y: 30, w: 6, h: 4 },
-  { x: 20, y: 12, w: 5, h: 5 },
-  { x: 64, y: 62, w: 5, h: 5 },
+  { x: 26, y: 16, w: 6, h: 4 },
+  { x: 12, y: 6, w: 5, h: 5 },
+  { x: 30, y: 30, w: 5, h: 5 },
 ];
 
 for (const cluster of mountainClusters) {
