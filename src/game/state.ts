@@ -15,6 +15,8 @@ export type GameState = {
     x: number;
     y: number;
   };
+  cpuHireRemaining: number;
+  uiEffects: UiEffect[];
   turn: {
     factionIndex: number;
     currentFaction: FactionId;
@@ -55,6 +57,17 @@ export type GameState = {
   incomePerCastle: number;
 };
 
+export type UiEffect =
+  | { kind: "turn"; label: string }
+  | {
+      kind: "attack";
+      attackerType: UnitType;
+      defenderType: UnitType;
+      attackerFaction: FactionId;
+      defenderFaction: FactionId;
+    }
+  | { kind: "occupy"; label: string };
+
 export const createInitialState = (): GameState => {
   const scenario = sampleScenario;
   const initialFaction = getFirstActiveFaction(scenario);
@@ -62,6 +75,8 @@ export const createInitialState = (): GameState => {
     scenario,
     config: createDefaultConfig(),
     cursor: { x: 0, y: 0 },
+    cpuHireRemaining: 1,
+    uiEffects: [],
     turn: {
       factionIndex: 0,
       currentFaction: initialFaction,
@@ -297,6 +312,7 @@ const startTurn = (state: GameState): void => {
       unit.movedThisTurn = false;
     }
   }
+  state.cpuHireRemaining = 1;
   const income = calcIncome(state.turn.currentFaction, state.map, state.baseIncome, state.incomePerTown, state.incomePerCastle);
   state.budgets[state.turn.currentFaction] += income.total;
   console.log(
@@ -326,6 +342,10 @@ export const endTurn = (state: GameState): void => {
   state.hireMenuOpen = false;
   state.magicMode = false;
   startTurn(state);
+
+  const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
+  const label = controller === "Human" ? "Player Turn" : "Enemy Turn";
+  state.uiEffects.push({ kind: "turn", label });
 };
 
 export const getUnitAt = (state: GameState, x: number, y: number): Unit | undefined => {
@@ -690,6 +710,13 @@ export const attackUnit = (state: GameState, attackerId: number, defenderId: num
 const resolveBattle = (state: GameState, attackerIndex: number, defenderIndex: number): void => {
   const attacker = state.units[attackerIndex];
   const defender = state.units[defenderIndex];
+  state.uiEffects.push({
+    kind: "attack",
+    attackerType: attacker.type,
+    defenderType: defender.type,
+    attackerFaction: attacker.faction,
+    defenderFaction: defender.faction,
+  });
   const result = battle(attacker, defender, state.map, {
     ...defaultBattleConfig,
     levelBonusAttack: state.levelBonusAttack,
@@ -1467,6 +1494,10 @@ const occupyIfPossible = (state: GameState, unit: Unit): boolean => {
   if (!canOccupy(unit, tile)) {
     return false;
   }
+  const wasOwnedBy = tile.ownerFaction;
   tile.ownerFaction = unit.faction;
+  if (tile.type === TileType.Town && wasOwnedBy !== unit.faction) {
+    state.uiEffects.push({ kind: "occupy", label: "街を占拠しました！" });
+  }
   return true;
 };

@@ -13,7 +13,7 @@ import {
   occupyUnit,
   supply,
 } from "../state";
-import { TileType, Unit, UnitType } from "../types";
+import { FactionId, TileType, Unit, UnitType } from "../types";
 import { hireableUnits, unitCatalog } from "../unitCatalog";
 
 const isAdjacent = (ax: number, ay: number, bx: number, by: number): boolean => {
@@ -135,19 +135,22 @@ const trySupply = (state: GameState, unitId: number): boolean => {
   return true;
 };
 
-const addHireStep = (state: GameState): boolean => {
+const addHireStep = (state: GameState): { hired: boolean; kingId?: number } => {
   const actingFaction = state.turn.currentFaction;
   const factionName = state.factions.find((faction) => faction.id === actingFaction)?.name ?? "Unknown";
+  if (state.cpuHireRemaining <= 0) {
+    return { hired: false };
+  }
   const kings = state.units.filter((unit) => unit.faction === actingFaction && unit.type === UnitType.King);
   if (kings.length === 0) {
     console.debug("CPU Hire: no king for faction", actingFaction);
-    return false;
+    return { hired: false };
   }
 
   const castleKings = kings.filter((king) => canHireAtCastle(state, king));
   if (castleKings.length === 0) {
     console.debug("CPU Hire: no king on castle", actingFaction);
-    return false;
+    return { hired: false };
   }
 
   const budget = state.budgets[actingFaction] ?? 0;
@@ -166,7 +169,7 @@ const addHireStep = (state: GameState): boolean => {
 
   if (!chosen || chosenCost === Number.POSITIVE_INFINITY) {
     console.debug("CPU Hire: insufficient budget", { faction: actingFaction, budget });
-    return false;
+    return { hired: false };
   }
 
   for (const king of castleKings) {
@@ -177,80 +180,103 @@ const addHireStep = (state: GameState): boolean => {
     }
     const hired = hireUnit(state, king.id, chosen);
     if (hired) {
+      state.cpuHireRemaining = Math.max(0, state.cpuHireRemaining - 1);
       console.log(`CPU Hire: ${factionName} hired ${chosen} cost=${chosenCost}`);
-      return true;
+      return { hired: true, kingId: king.id };
     }
   }
 
   console.debug("CPU Hire: hire failed", { faction: actingFaction, unitType: chosen });
-  return false;
+  return { hired: false };
 };
 
-export const runCpuTurn = (state: GameState): void => {
+type CpuStepOptions = {
+  factionId?: FactionId;
+  skipUnit?: (unit: Unit) => boolean;
+  allowEndTurn?: boolean;
+};
+
+export const runCpuTurnStep = (
+  state: GameState,
+  options?: CpuStepOptions,
+): { acted: boolean; focusUnitId?: number; turnEnded?: boolean } => {
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
   state.hireMenuOpen = false;
   state.magicMode = false;
 
-  const actingFaction = state.turn.currentFaction;
-  let hiresRemaining = 1;
-  const unitIds = state.units
-    .filter((unit) => unit.faction === actingFaction)
-    .map((unit) => unit.id);
+  const actingFaction = options?.factionId ?? state.turn.currentFaction;
+  const units = state.units.filter((unit) => unit.faction === actingFaction);
 
-  for (const unitId of unitIds) {
-    const unit = state.units.find((entry) => entry.id === unitId);
-    if (!unit || unit.acted) {
+  for (const unit of units) {
+    if (unit.acted || options?.skipUnit?.(unit)) {
       continue;
     }
 
     const adjacentEnemy = findAdjacentEnemy(state, unit);
     if (adjacentEnemy) {
       attackUnit(state, unit.id, adjacentEnemy.id);
-      continue;
+      return { acted: true, focusUnitId: unit.id };
     }
 
     const tile = getTile(state, unit.x, unit.y);
     if (canOccupy(unit, tile)) {
       occupyUnit(state, unit.id);
-      continue;
+      return { acted: true, focusUnitId: unit.id };
     }
 
-    if (hiresRemaining > 0 && addHireStep(state)) {
-      hiresRemaining -= 1;
+    const hireResult = addHireStep(state);
+    if (hireResult.hired) {
+      return { acted: true, focusUnitId: hireResult.kingId };
     }
 
     if (trySupply(state, unit.id)) {
-      continue;
+      return { acted: true, focusUnitId: unit.id };
     }
 
-    if (unit.food <= 0) {
-      continue;
+    if (unit.food <= 0 || unit.movedThisTurn) {
+      unit.acted = true;
+      return { acted: true, focusUnitId: unit.id };
     }
 
     const target = pickMoveTarget(state, unit);
     if (!target) {
-      continue;
+      unit.acted = true;
+      return { acted: true, focusUnitId: unit.id };
     }
 
-    moveUnitTo(state, unit.id, target.x, target.y);
-    const moved = state.units.find((entry) => entry.id === unit.id);
-    if (!moved || moved.acted) {
-      continue;
+    const moved = moveUnitTo(state, unit.id, target.x, target.y);
+    if (!moved) {
+      unit.acted = true;
+      return { acted: true, focusUnitId: unit.id };
     }
 
-    const enemyAfterMove = findAdjacentEnemy(state, moved);
+    const movedUnit = state.units.find((entry) => entry.id === unit.id);
+    if (!movedUnit || movedUnit.acted) {
+      return { acted: true, focusUnitId: unit.id };
+    }
+
+    const enemyAfterMove = findAdjacentEnemy(state, movedUnit);
     if (enemyAfterMove) {
-      attackUnit(state, moved.id, enemyAfterMove.id);
-      continue;
+      attackUnit(state, movedUnit.id, enemyAfterMove.id);
+      return { acted: true, focusUnitId: movedUnit.id };
     }
 
-    const movedTile = getTile(state, moved.x, moved.y);
-    if (canOccupy(moved, movedTile)) {
-      occupyUnit(state, moved.id);
+    const movedTile = getTile(state, movedUnit.x, movedUnit.y);
+    if (canOccupy(movedUnit, movedTile)) {
+      occupyUnit(state, movedUnit.id);
+      return { acted: true, focusUnitId: movedUnit.id };
     }
+
+    movedUnit.acted = true;
+    return { acted: true, focusUnitId: movedUnit.id };
+  }
+
+  if (options?.allowEndTurn === false) {
+    return { acted: false };
   }
 
   endTurn(state);
+  return { acted: false, turnEnded: true };
 };

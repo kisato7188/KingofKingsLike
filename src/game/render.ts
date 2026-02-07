@@ -40,6 +40,7 @@ import {
 } from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
+import { UiEffect } from "./state";
 
 type UnitImageState = {
   image: HTMLImageElement;
@@ -133,11 +134,91 @@ const mapToScreen = (view: MapView, mapX: number, mapY: number): { x: number; y:
   };
 };
 
+const drawUiEffect = (
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  effectState: { effect: UiEffect; elapsed: number; duration: number } | null,
+): void => {
+  if (!effectState) {
+    return;
+  }
+
+  const { effect, elapsed, duration } = effectState;
+  const frameWidth = getMapFrameWidth();
+  const frameHeight = getMapFrameHeight();
+  const bandHeight = Math.round(TILE_SIZE * 1.2);
+  const bandY = Math.round((frameHeight - bandHeight) / 2);
+
+  const inDuration = duration * 0.25;
+  const outDuration = duration * 0.25;
+  const holdDuration = Math.max(0, duration - inDuration - outDuration);
+
+  let textX = frameWidth / 2;
+  if (elapsed < inDuration) {
+    const t = elapsed / inDuration;
+    textX = -frameWidth * 0.4 + t * (frameWidth * 0.9);
+  } else if (elapsed > inDuration + holdDuration) {
+    const t = (elapsed - inDuration - holdDuration) / outDuration;
+    textX = frameWidth / 2 + t * (frameWidth * 0.9);
+  }
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+  ctx.fillRect(0, bandY, frameWidth, bandHeight);
+
+  ctx.font = `${Math.round(TILE_SIZE * 0.55)}px 'Noto Sans JP', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+
+  const centerY = bandY + bandHeight / 2;
+
+  if (effect.kind === "turn") {
+    ctx.fillText(effect.label, textX, centerY);
+    return;
+  }
+
+  if (effect.kind === "occupy") {
+    ctx.fillText(effect.label, textX, centerY);
+    return;
+  }
+
+  ctx.fillText("Attack!", textX, centerY);
+
+  const attackerImage = getUnitImage(effect.attackerType);
+  const defenderImage = getUnitImage(effect.defenderType);
+  const portraitSize = Math.round(TILE_SIZE * 0.95);
+  const portraitY = bandY + bandHeight - portraitSize;
+  const leftX = Math.round(frameWidth * 0.18 - portraitSize / 2);
+  const rightX = Math.round(frameWidth * 0.82 - portraitSize / 2);
+
+  if (attackerImage.loaded && !attackerImage.failed) {
+    ctx.drawImage(attackerImage.image, leftX, portraitY, portraitSize, portraitSize);
+  } else {
+    ctx.fillStyle = getFactionColor(state, effect.attackerFaction);
+    ctx.fillRect(leftX, portraitY, portraitSize, portraitSize);
+    ctx.fillStyle = "#0f1116";
+    ctx.font = `${Math.round(TILE_SIZE * 0.3)}px 'Noto Sans JP', sans-serif`;
+    ctx.fillText(effect.attackerType, leftX + portraitSize / 2, portraitY + portraitSize / 2);
+  }
+
+  if (defenderImage.loaded && !defenderImage.failed) {
+    ctx.drawImage(defenderImage.image, rightX, portraitY, portraitSize, portraitSize);
+  } else {
+    ctx.fillStyle = getFactionColor(state, effect.defenderFaction);
+    ctx.fillRect(rightX, portraitY, portraitSize, portraitSize);
+    ctx.fillStyle = "#0f1116";
+    ctx.font = `${Math.round(TILE_SIZE * 0.3)}px 'Noto Sans JP', sans-serif`;
+    ctx.fillText(effect.defenderType, rightX + portraitSize / 2, portraitY + portraitSize / 2);
+  }
+};
+
 export const render = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
   unitDrawPositions?: UnitDrawPositions,
   view?: MapView,
+  effectState?: { effect: UiEffect; elapsed: number; duration: number } | null,
+  animatingUnits?: Set<number>,
 ): void => {
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
@@ -164,7 +245,7 @@ export const render = (
   drawHirePlacement(ctx, state);
   drawZoc(ctx, state);
   drawGrid(ctx, state);
-  drawUnits(ctx, state, unitDrawPositions);
+  drawUnits(ctx, state, unitDrawPositions, animatingUnits);
   drawCursor(ctx, state);
   ctx.restore();
 
@@ -173,6 +254,7 @@ export const render = (
   drawHireMenu(ctx, state);
   drawGlobalInfo(ctx, state);
   drawUnitInfo(ctx, state);
+  drawUiEffect(ctx, state, effectState ?? null);
 };
 
 const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
@@ -318,6 +400,7 @@ const drawUnits = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
   unitDrawPositions?: UnitDrawPositions,
+  animatingUnits?: Set<number>,
 ): void => {
   for (const unit of state.units) {
     const drawPosition = unitDrawPositions?.get(unit.id) ?? { x: unit.x, y: unit.y };
@@ -350,7 +433,7 @@ const drawUnits = (
       ctx.fillText(getUnitLabel(unit.type), canvasX + TILE_SIZE / 2, canvasY + TILE_SIZE / 2);
     }
 
-    if (unit.movedThisTurn && unit.acted) {
+    if (unit.acted && !animatingUnits?.has(unit.id)) {
       ctx.fillStyle = "rgba(120, 120, 120, 0.45)";
       ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
     }

@@ -25,9 +25,11 @@ import {
   openContextMenu,
   updateState,
   GameState,
+  UiEffect,
 } from "./state";
-import { runCpuTurn } from "./ai/cpuController";
+import { runCpuTurnStep } from "./ai/cpuController";
 import { hireableUnits } from "./unitCatalog";
+import { UnitType } from "./types";
 
 type UnitAnimation = {
   path: Array<{ x: number; y: number }>;
@@ -41,6 +43,8 @@ const MIN_MOVE_DURATION = 0.05;
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.5;
+const EFFECT_DURATION = 1.5;
+const CPU_STEP_DELAY = 1;
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -51,9 +55,16 @@ export class Game {
   private zoom = 1;
   private panX = 0;
   private panY = 0;
+  private activeEffect: UiEffect | null = null;
+  private effectElapsed = 0;
   private isPanning = false;
   private lastPanPosition: { x: number; y: number } | null = null;
+  private cpuActionCooldown = 0;
+  private cpuFocusUnitId: number | null = null;
   private lastMousePosition: { x: number; y: number } | null = null;
+  private autoMode = false;
+  private lastTurnFaction: number | null = null;
+  private lastTurnController: string | null = null;
   private readonly unitAnimations = new Map<number, UnitAnimation>();
   private readonly unitLastPositions = new Map<number, { x: number; y: number }>();
 
@@ -91,8 +102,23 @@ export class Game {
     if (controller !== "Human") {
       return;
     }
+    this.autoMode = false;
     clearSelection(this.state);
     endTurn(this.state);
+  }
+
+  toggleAutoMode(): boolean {
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller !== "Human") {
+      this.autoMode = false;
+      return this.autoMode;
+    }
+    this.autoMode = !this.autoMode;
+    if (!this.autoMode) {
+      this.cpuFocusUnitId = null;
+      this.cpuActionCooldown = 0;
+    }
+    return this.autoMode;
   }
 
   private loop = (time: number): void => {
@@ -108,23 +134,116 @@ export class Game {
   private update(delta: number): void {
     const previousPositions = new Map(this.unitLastPositions);
     const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    const effectBlocking =
+      this.activeEffect !== null || this.state.uiEffects.length > 0 || this.unitAnimations.size > 0;
     if (controller === "CPU") {
+      this.autoMode = false;
       updateState(this.state, this.input, false);
       const updated = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
       if (updated === "CPU") {
-        runCpuTurn(this.state);
+        this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
+        if (!effectBlocking && this.cpuActionCooldown <= 0) {
+          const result = runCpuTurnStep(this.state);
+          if (result.focusUnitId !== undefined) {
+            this.cpuFocusUnitId = result.focusUnitId;
+          }
+          if (result.acted) {
+            this.cpuActionCooldown = CPU_STEP_DELAY;
+          }
+          if (result.turnEnded) {
+            this.cpuFocusUnitId = null;
+          }
+        }
       }
     } else {
       updateState(this.state, this.input, true);
+      if (this.autoMode) {
+        this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
+        if (!effectBlocking && this.cpuActionCooldown <= 0) {
+          const result = runCpuTurnStep(this.state, {
+            factionId: this.state.turn.currentFaction,
+            skipUnit: (unit) => unit.type === UnitType.King,
+            allowEndTurn: false,
+          });
+          if (result.focusUnitId !== undefined) {
+            this.cpuFocusUnitId = result.focusUnitId;
+          }
+          if (result.acted) {
+            this.cpuActionCooldown = CPU_STEP_DELAY;
+          } else {
+            this.autoMode = false;
+            this.cpuFocusUnitId = null;
+          }
+        }
+      } else {
+        this.cpuActionCooldown = 0;
+        this.cpuFocusUnitId = null;
+      }
     }
     this.handleZoomInput();
     this.handleEdgePan(delta);
     this.input.endFrame();
     this.syncUnitAnimations(previousPositions, delta);
+    this.updateEffects(delta);
+    this.updatePlayerTurnFocus(controller);
+    this.updateCpuCameraFocus();
+  }
+
+  private updatePlayerTurnFocus(controller: string): void {
+    const currentFaction = this.state.turn.currentFaction;
+    const turnChanged = this.lastTurnFaction !== currentFaction || this.lastTurnController !== controller;
+    this.lastTurnFaction = currentFaction;
+    this.lastTurnController = controller;
+
+    if (!turnChanged || controller !== "Human") {
+      return;
+    }
+
+    const king = this.state.units.find(
+      (unit) => unit.faction === currentFaction && unit.type === UnitType.King,
+    );
+    if (!king) {
+      return;
+    }
+    this.centerOnMapPosition(king.x * TILE_SIZE + TILE_SIZE / 2, king.y * TILE_SIZE + TILE_SIZE / 2);
   }
 
   private render(): void {
-    render(this.ctx, this.state, this.getUnitDrawPositions(), this.getMapView());
+    render(
+      this.ctx,
+      this.state,
+      this.getUnitDrawPositions(),
+      this.getMapView(),
+      this.getEffectState(),
+      new Set(this.unitAnimations.keys()),
+    );
+  }
+
+  private updateEffects(delta: number): void {
+    if (this.unitAnimations.size > 0) {
+      return;
+    }
+    if (!this.activeEffect && this.state.uiEffects.length > 0) {
+      this.activeEffect = this.state.uiEffects.shift() ?? null;
+      this.effectElapsed = 0;
+    }
+
+    if (!this.activeEffect) {
+      return;
+    }
+
+    this.effectElapsed += delta;
+    if (this.effectElapsed >= EFFECT_DURATION) {
+      this.activeEffect = null;
+      this.effectElapsed = 0;
+    }
+  }
+
+  private getEffectState(): { effect: UiEffect; elapsed: number; duration: number } | null {
+    if (!this.activeEffect) {
+      return null;
+    }
+    return { effect: this.activeEffect, elapsed: this.effectElapsed, duration: EFFECT_DURATION };
   }
 
   private handleZoomInput(): void {
@@ -198,6 +317,36 @@ export class Game {
   private adjustPan(deltaX: number, deltaY: number): void {
     this.panX += deltaX;
     this.panY += deltaY;
+    this.clampPan();
+  }
+
+  private updateCpuCameraFocus(): void {
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if ((controller !== "CPU" && !this.autoMode) || this.cpuFocusUnitId === null) {
+      return;
+    }
+    const position = this.getUnitDrawPosition(this.cpuFocusUnitId);
+    if (!position) {
+      return;
+    }
+    this.centerOnMapPosition(position.x * TILE_SIZE + TILE_SIZE / 2, position.y * TILE_SIZE + TILE_SIZE / 2);
+  }
+
+  private centerOnMapPosition(mapX: number, mapY: number): void {
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const scaledX = mapX * this.zoom;
+    const scaledY = mapY * this.zoom;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const desiredOffsetX = frameWidthPx / 2 - scaledX;
+    const desiredOffsetY = frameHeightPx / 2 - scaledY;
+    this.panX = desiredOffsetX - baseOffsetX;
+    this.panY = desiredOffsetY - baseOffsetY;
     this.clampPan();
   }
 
@@ -279,12 +428,14 @@ export class Game {
 
     for (const [unitId, anim] of this.unitAnimations.entries()) {
       anim.elapsed += delta;
-      while (anim.elapsed >= anim.duration && anim.segmentIndex < anim.path.length - 2) {
-        anim.elapsed -= anim.duration;
-        anim.segmentIndex += 1;
-      }
-      if (anim.segmentIndex >= anim.path.length - 1) {
-        this.unitAnimations.delete(unitId);
+      while (anim.elapsed >= anim.duration) {
+        if (anim.segmentIndex < anim.path.length - 2) {
+          anim.elapsed -= anim.duration;
+          anim.segmentIndex += 1;
+        } else {
+          this.unitAnimations.delete(unitId);
+          break;
+        }
       }
     }
 
@@ -337,6 +488,24 @@ export class Game {
       positions.set(unit.id, { x, y });
     }
     return positions;
+  }
+
+  private getUnitDrawPosition(unitId: number): { x: number; y: number } | null {
+    const unit = this.state.units.find((entry) => entry.id === unitId);
+    if (!unit) {
+      return null;
+    }
+    const anim = this.unitAnimations.get(unitId);
+    if (!anim) {
+      return { x: unit.x, y: unit.y };
+    }
+    const progress = Math.min(1, anim.elapsed / anim.duration);
+    const from = anim.path[anim.segmentIndex] ?? { x: unit.x, y: unit.y };
+    const to = anim.path[anim.segmentIndex + 1] ?? from;
+    return {
+      x: from.x + (to.x - from.x) * progress,
+      y: from.y + (to.y - from.y) * progress,
+    };
   }
 
   private handleMouseMove = (event: MouseEvent): void => {
