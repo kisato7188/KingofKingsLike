@@ -17,6 +17,17 @@ const setTile = (x: number, y: number, type: TileType, ownerFaction?: FactionId 
   tiles[index] = type === TileType.Town || type === TileType.Castle ? { type, ownerFaction: ownerFaction ?? null } : { type };
 };
 
+const setTerrainIfGrass = (x: number, y: number, type: TileType): void => {
+  if (x < 0 || y < 0 || x >= width || y >= height) {
+    return;
+  }
+  const index = getTileIndex(x, y, width);
+  if (tiles[index].type !== TileType.Grass) {
+    return;
+  }
+  tiles[index] = { type };
+};
+
 const drawManhattan = (from: { x: number; y: number }, to: { x: number; y: number }): void => {
   const stepX = from.x <= to.x ? 1 : -1;
   const stepY = from.y <= to.y ? 1 : -1;
@@ -63,6 +74,64 @@ const townsOffRoutes = [
 [...townsOnRoutes, ...townsOffRoutes].forEach((town) => {
   setTile(town.x, town.y, TileType.Town, null);
 });
+
+const forestRings = [
+  { center: { x: 30, y: 70 }, radius: 2 },
+  { center: { x: 10, y: 20 }, radius: 2 },
+];
+
+for (const ring of forestRings) {
+  for (let dy = -ring.radius; dy <= ring.radius; dy += 1) {
+    for (let dx = -ring.radius; dx <= ring.radius; dx += 1) {
+      const x = ring.center.x + dx;
+      const y = ring.center.y + dy;
+      if (dx === 0 && dy === 0) {
+        continue;
+      }
+      if (Math.abs(dx) + Math.abs(dy) > ring.radius + 1) {
+        continue;
+      }
+      setTerrainIfGrass(x, y, TileType.Forest);
+    }
+  }
+}
+
+const forestClusters = [
+  { x: 18, y: 46, w: 6, h: 5 },
+  { x: 46, y: 20, w: 7, h: 6 },
+  { x: 60, y: 48, w: 6, h: 6 },
+];
+
+for (const cluster of forestClusters) {
+  for (let y = cluster.y; y < cluster.y + cluster.h; y += 1) {
+    for (let x = cluster.x; x < cluster.x + cluster.w; x += 1) {
+      setTerrainIfGrass(x, y, TileType.Forest);
+    }
+  }
+}
+
+const mountainRidgeY = { start: 14, end: 64, gapStart: 36, gapEnd: 40 };
+for (let y = mountainRidgeY.start; y <= mountainRidgeY.end; y += 1) {
+  if (y >= mountainRidgeY.gapStart && y <= mountainRidgeY.gapEnd) {
+    continue;
+  }
+  setTerrainIfGrass(38, y, TileType.Mountain);
+  setTerrainIfGrass(39, y, TileType.Mountain);
+}
+
+const mountainClusters = [
+  { x: 52, y: 30, w: 6, h: 4 },
+  { x: 20, y: 12, w: 5, h: 5 },
+  { x: 64, y: 62, w: 5, h: 5 },
+];
+
+for (const cluster of mountainClusters) {
+  for (let y = cluster.y; y < cluster.y + cluster.h; y += 1) {
+    for (let x = cluster.x; x < cluster.x + cluster.w; x += 1) {
+      setTerrainIfGrass(x, y, TileType.Mountain);
+    }
+  }
+}
 
 export const sampleScenario: Scenario = {
   id: "sample",

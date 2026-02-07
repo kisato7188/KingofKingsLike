@@ -30,7 +30,14 @@ import {
   SIDEBAR_WIDTH,
   TILE_SIZE,
 } from "./constants";
-import { boardToCanvas, getTileIndex, getViewportHeight, getViewportWidth } from "./geometry";
+import {
+  boardToCanvas,
+  getMapFrameHeight,
+  getMapFrameWidth,
+  getTileIndex,
+  getViewportHeight,
+  getViewportWidth,
+} from "./geometry";
 import { FactionId, TileType, Unit, UnitType } from "./types";
 import { hireableUnits, unitCatalog } from "./unitCatalog";
 
@@ -91,8 +98,8 @@ export const render = (
 ): void => {
   const viewportWidth = getViewportWidth(state.map);
   const viewportHeight = getViewportHeight(state.map);
-  const mapWidthPx = state.map.width * TILE_SIZE;
-  const mapHeightPx = state.map.height * TILE_SIZE;
+  const frameWidthPx = getMapFrameWidth();
+  const frameHeightPx = getMapFrameHeight();
 
   ctx.clearRect(0, 0, viewportWidth, viewportHeight);
 
@@ -101,7 +108,7 @@ export const render = (
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, 0, mapWidthPx, mapHeightPx);
+  ctx.rect(0, 0, frameWidthPx, frameHeightPx);
   ctx.clip();
   if (view) {
     ctx.translate(view.offsetX, view.offsetY);
@@ -359,12 +366,12 @@ const drawActionMenu = (ctx: CanvasRenderingContext2D, state: GameState, view?: 
   const menuWidth = ACTION_MENU_WIDTH;
   const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-  const mapWidthPx = state.map.width * TILE_SIZE * mapView.zoom;
-  const mapHeightPx = state.map.height * TILE_SIZE * mapView.zoom;
-  const minX = mapView.offsetX + MENU_EDGE_PADDING;
-  const minY = mapView.offsetY + MENU_EDGE_PADDING;
-  const maxX = mapView.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-  const maxY = mapView.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+  const frameWidthPx = getMapFrameWidth();
+  const frameHeightPx = getMapFrameHeight();
+  const minX = MENU_EDGE_PADDING;
+  const minY = MENU_EDGE_PADDING;
+  const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+  const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
   const menuX = Math.max(minX, Math.min(screenPos.x + TILE_SIZE * mapView.zoom + MENU_UNIT_OFFSET, maxX));
   const menuY = Math.max(minY, Math.min(screenPos.y - MENU_UNIT_OFFSET, maxY));
 
@@ -400,12 +407,12 @@ const drawContextMenu = (ctx: CanvasRenderingContext2D, state: GameState, view?:
   const menuWidth = ACTION_MENU_WIDTH;
   const rowHeight = MENU_ROW_HEIGHT;
   const menuHeight = MENU_PADDING_Y + rowHeight;
-  const mapWidthPx = state.map.width * TILE_SIZE * mapView.zoom;
-  const mapHeightPx = state.map.height * TILE_SIZE * mapView.zoom;
-  const minX = mapView.offsetX + MENU_EDGE_PADDING;
-  const minY = mapView.offsetY + MENU_EDGE_PADDING;
-  const maxX = mapView.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-  const maxY = mapView.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+  const frameWidthPx = getMapFrameWidth();
+  const frameHeightPx = getMapFrameHeight();
+  const minX = MENU_EDGE_PADDING;
+  const minY = MENU_EDGE_PADDING;
+  const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+  const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
   const menuX = Math.max(minX, Math.min(screenPos.x + TILE_SIZE * mapView.zoom + MENU_UNIT_OFFSET, maxX));
   const menuY = Math.max(minY, Math.min(screenPos.y - MENU_UNIT_OFFSET, maxY));
 

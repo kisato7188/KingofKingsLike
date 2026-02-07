@@ -1,5 +1,5 @@
 import { Input } from "./Input";
-import { getViewportHeight, getViewportWidth } from "./geometry";
+import { getMapFrameHeight, getMapFrameWidth, getViewportHeight, getViewportWidth } from "./geometry";
 import { MapView, render, UnitDrawPositions } from "./render";
 import {
   ACTION_MENU_WIDTH,
@@ -39,7 +39,7 @@ type UnitAnimation = {
 const MOVE_SECONDS_PER_TILE = 0.2;
 const MIN_MOVE_DURATION = 0.05;
 const ZOOM_STEP = 0.1;
-const MIN_ZOOM = 0.5;
+const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.5;
 
 export class Game {
@@ -158,12 +158,14 @@ export class Game {
   private getMapView(): MapView {
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
     const scaledWidth = mapWidthPx * this.zoom;
     const scaledHeight = mapHeightPx * this.zoom;
-    const baseOffsetX = (mapWidthPx - scaledWidth) / 2;
-    const baseOffsetY = (mapHeightPx - scaledHeight) / 2;
-    const limitX = this.getPanLimits(mapWidthPx, scaledWidth);
-    const limitY = this.getPanLimits(mapHeightPx, scaledHeight);
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(frameWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(frameHeightPx, scaledHeight);
     const offsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
     const offsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
     return { zoom: this.zoom, offsetX, offsetY };
@@ -179,12 +181,14 @@ export class Game {
   private clampPan(): void {
     const mapWidthPx = this.state.map.width * TILE_SIZE;
     const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
     const scaledWidth = mapWidthPx * this.zoom;
     const scaledHeight = mapHeightPx * this.zoom;
-    const baseOffsetX = (mapWidthPx - scaledWidth) / 2;
-    const baseOffsetY = (mapHeightPx - scaledHeight) / 2;
-    const limitX = this.getPanLimits(mapWidthPx, scaledWidth);
-    const limitY = this.getPanLimits(mapHeightPx, scaledHeight);
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(frameWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(frameHeightPx, scaledHeight);
     const clampedOffsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
     const clampedOffsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
     this.panX = clampedOffsetX - baseOffsetX;
@@ -202,12 +206,12 @@ export class Game {
       return;
     }
 
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
     const edgeThreshold = 24;
     const speed = 360;
     const { x, y } = this.lastMousePosition;
-    if (x < 0 || y < 0 || x > mapWidthPx || y > mapHeightPx) {
+    if (x < 0 || y < 0 || x > frameWidthPx || y > frameHeightPx) {
       return;
     }
 
@@ -216,13 +220,13 @@ export class Game {
 
     if (x <= edgeThreshold) {
       deltaX += speed * delta;
-    } else if (x >= mapWidthPx - edgeThreshold) {
+    } else if (x >= frameWidthPx - edgeThreshold) {
       deltaX -= speed * delta;
     }
 
     if (y <= edgeThreshold) {
       deltaY += speed * delta;
-    } else if (y >= mapHeightPx - edgeThreshold) {
+    } else if (y >= frameHeightPx - edgeThreshold) {
       deltaY -= speed * delta;
     }
 
@@ -242,14 +246,16 @@ export class Game {
   }
 
   private getMapLocalPosition(localX: number, localY: number): { x: number; y: number } | null {
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    if (localX < 0 || localY < 0 || localX >= mapWidthPx || localY >= mapHeightPx) {
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    if (localX < 0 || localY < 0 || localX >= frameWidthPx || localY >= frameHeightPx) {
       return null;
     }
     const view = this.getMapView();
     const mapX = (localX - view.offsetX) / view.zoom;
     const mapY = (localY - view.offsetY) / view.zoom;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
     if (mapX < 0 || mapY < 0 || mapX >= mapWidthPx || mapY >= mapHeightPx) {
       return null;
     }
@@ -478,12 +484,12 @@ export class Game {
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
-    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
-    const minX = view.offsetX + MENU_EDGE_PADDING;
-    const minY = view.offsetY + MENU_EDGE_PADDING;
-    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
     const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
     const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
@@ -556,12 +562,12 @@ export class Game {
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
-    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
-    const minX = view.offsetX + MENU_EDGE_PADDING;
-    const minY = view.offsetY + MENU_EDGE_PADDING;
-    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
     const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
     const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
@@ -598,12 +604,12 @@ export class Game {
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
-    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
-    const minX = view.offsetX + MENU_EDGE_PADDING;
-    const minY = view.offsetY + MENU_EDGE_PADDING;
-    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
     const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
     const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
@@ -659,12 +665,12 @@ export class Game {
     const menuWidth = ACTION_MENU_WIDTH;
     const rowHeight = MENU_ROW_HEIGHT;
     const menuHeight = MENU_PADDING_Y + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE * view.zoom;
-    const mapHeightPx = this.state.map.height * TILE_SIZE * view.zoom;
-    const minX = view.offsetX + MENU_EDGE_PADDING;
-    const minY = view.offsetY + MENU_EDGE_PADDING;
-    const maxX = view.offsetX + mapWidthPx - menuWidth - MENU_EDGE_PADDING;
-    const maxY = view.offsetY + mapHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
     const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
     const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
