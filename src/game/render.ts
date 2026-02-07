@@ -191,10 +191,13 @@ const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
       if (tileImage.loaded && !tileImage.failed) {
         const imageWidth = tileImage.image.width || TILE_SIZE;
         const imageHeight = tileImage.image.height || TILE_SIZE;
-        const drawY = canvasY + TILE_SIZE - imageHeight;
+        const scale = TILE_SIZE / imageWidth;
+        const drawWidth = imageWidth * scale;
+        const drawHeight = imageHeight * scale;
+        const drawY = canvasY + TILE_SIZE - drawHeight;
         const smoothing = ctx.imageSmoothingEnabled;
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(tileImage.image, canvasX, drawY, imageWidth, imageHeight);
+        ctx.drawImage(tileImage.image, canvasX, drawY, drawWidth, drawHeight);
         ctx.imageSmoothingEnabled = smoothing;
       } else {
         ctx.fillStyle = getTileColor(tile.type);
