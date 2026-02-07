@@ -70,6 +70,11 @@ body {
   margin-bottom: 6px;
 }
 
+.rules-section {
+  font-weight: 700;
+  margin: 10px 0 6px;
+}
+
 .rules-list {
   margin: 0;
   padding-left: 18px;
