@@ -47,7 +47,23 @@ type UnitImageState = {
   failed: boolean;
 };
 
+type TileImageState = {
+  image: HTMLImageElement;
+  loaded: boolean;
+  failed: boolean;
+};
+
 const unitImageCache = new Map<UnitType, UnitImageState>();
+const tileImageCache = new Map<TileType, TileImageState>();
+
+const tileImageFiles: Record<TileType, string> = {
+  [TileType.Grass]: "001.png",
+  [TileType.Forest]: "009.png",
+  [TileType.Mountain]: "014.png",
+  [TileType.Town]: "023.png",
+  [TileType.Road]: "028.png",
+  [TileType.Castle]: "030.png",
+};
 
 const getUnitImage = (unitType: UnitType): UnitImageState => {
   const cached = unitImageCache.get(unitType);
@@ -73,6 +89,33 @@ const getUnitImage = (unitType: UnitType): UnitImageState => {
   image.src = `${normalizedBase}units/${unitType}.png`;
 
   unitImageCache.set(unitType, state);
+  return state;
+};
+
+const getTileImage = (tileType: TileType): TileImageState => {
+  const cached = tileImageCache.get(tileType);
+  if (cached) {
+    return cached;
+  }
+
+  const image = new Image();
+  const state: TileImageState = {
+    image,
+    loaded: false,
+    failed: false,
+  };
+
+  image.onload = () => {
+    state.loaded = true;
+  };
+  image.onerror = () => {
+    state.failed = true;
+  };
+  const baseUrl = import.meta.env.BASE_URL ?? "/";
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  image.src = `${normalizedBase}tileset/${tileImageFiles[tileType]}`;
+
+  tileImageCache.set(tileType, state);
   return state;
 };
 
@@ -144,8 +187,19 @@ const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
       const tile = state.map.tiles[getTileIndex(x, y, state.map.width)];
       const { x: canvasX, y: canvasY } = boardToCanvas(x, y);
 
-      ctx.fillStyle = getTileColor(tile.type);
-      ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+      const tileImage = getTileImage(tile.type);
+      if (tileImage.loaded && !tileImage.failed) {
+        const imageWidth = tileImage.image.width || TILE_SIZE;
+        const imageHeight = tileImage.image.height || TILE_SIZE;
+        const drawY = canvasY + TILE_SIZE - imageHeight;
+        const smoothing = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tileImage.image, canvasX, drawY, imageWidth, imageHeight);
+        ctx.imageSmoothingEnabled = smoothing;
+      } else {
+        ctx.fillStyle = getTileColor(tile.type);
+        ctx.fillRect(canvasX, canvasY, TILE_SIZE, TILE_SIZE);
+      }
 
       if (tile.type === TileType.Town || tile.type === TileType.Castle) {
         const ownerColor = tile.ownerFaction !== undefined && tile.ownerFaction !== null
@@ -154,14 +208,6 @@ const drawTiles = (ctx: CanvasRenderingContext2D, state: GameState): void => {
         ctx.strokeStyle = ownerColor;
         ctx.lineWidth = 2;
         ctx.strokeRect(canvasX + 2, canvasY + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.fillRect(canvasX + 6, canvasY + 6, TILE_SIZE - 12, 16);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "12px 'Noto Sans JP', sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText(tile.type === TileType.Castle ? "城" : "町", canvasX + TILE_SIZE / 2, canvasY + 6);
       }
     }
   }
