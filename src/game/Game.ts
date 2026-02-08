@@ -62,7 +62,7 @@ export class Game {
   private effectCooldown = 0;
   private isPanning = false;
   private lastPanPosition: { x: number; y: number } | null = null;
-  private leftClickStart: { x: number; y: number; time: number } | null = null;
+  private leftClickStart: { x: number; y: number } | null = null;
   private cpuActionCooldown = 0;
   private cpuFocusUnitId: number | null = null;
   private lastMousePosition: { x: number; y: number } | null = null;
@@ -693,8 +693,8 @@ export class Game {
       return;
     }
 
-    // Track left-click start position and time for drag detection
-    this.leftClickStart = { x: local.x, y: local.y, time: Date.now() };
+    // Track left-click start position for drag detection
+    this.leftClickStart = { x: local.x, y: local.y };
 
     if (this.state.actionMenuOpen && this.handleActionMenuClick(local.x, local.y)) {
       this.leftClickStart = null;
@@ -718,7 +718,7 @@ export class Game {
     }
     this.state.cursor.x = position.x;
     this.state.cursor.y = position.y;
-    // Don't handle tile click yet - wait to see if this is a drag
+    // Don't handle tile click yet - deferred to handleMouseUp to distinguish click from drag
   };
 
   private handleContextMenu = (event: MouseEvent): void => {
