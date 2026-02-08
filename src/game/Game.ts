@@ -25,6 +25,12 @@ export class Game {
   private readonly input: Input;
   private state: GameState;
   private lastTime = 0;
+  private isDragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragScrollLeft = 0;
+  private dragScrollTop = 0;
+  private hasDragged = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -41,6 +47,8 @@ export class Game {
     this.input = new Input(window);
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
+    this.canvas.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener("mouseleave", this.handleMouseLeave);
     this.canvas.addEventListener("contextmenu", this.handleContextMenu);
   }
 
@@ -86,6 +94,21 @@ export class Game {
   }
 
   private handleMouseMove = (event: MouseEvent): void => {
+    if (this.isDragging) {
+      const deltaX = event.clientX - this.dragStartX;
+      const deltaY = event.clientY - this.dragStartY;
+      
+      // Check if user has moved enough to consider it a drag
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        this.hasDragged = true;
+      }
+      
+      // Update scroll position on the body element
+      document.body.scrollLeft = this.dragScrollLeft - deltaX;
+      document.body.scrollTop = this.dragScrollTop - deltaY;
+      return;
+    }
+
     const local = this.getLocalPosition(event);
     if (!local) {
       return;
@@ -111,35 +134,64 @@ export class Game {
     if (event.button !== 0) {
       return;
     }
-    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
-    if (controller !== "Human") {
+
+    // Initialize drag state
+    this.isDragging = true;
+    this.hasDragged = false;
+    this.dragStartX = event.clientX;
+    this.dragStartY = event.clientY;
+    this.dragScrollLeft = document.body.scrollLeft;
+    this.dragScrollTop = document.body.scrollTop;
+    this.canvas.style.cursor = 'grabbing';
+  };
+
+  private handleMouseUp = (event: MouseEvent): void => {
+    if (event.button !== 0) {
       return;
     }
 
-    const local = this.getLocalPosition(event);
-    if (!local) {
-      return;
-    }
+    this.isDragging = false;
+    this.canvas.style.cursor = '';
 
-    if (this.state.actionMenuOpen && this.handleActionMenuClick(local.x, local.y)) {
-      return;
-    }
+    // If the user didn't drag, treat it as a click
+    if (!this.hasDragged) {
+      const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+      if (controller !== "Human") {
+        return;
+      }
 
-    if (this.state.hireMenuOpen && this.handleHireMenuClick(local.x, local.y)) {
-      return;
-    }
+      const local = this.getLocalPosition(event);
+      if (!local) {
+        return;
+      }
 
-    if (this.state.contextMenuOpen && this.handleContextMenuClick(local.x, local.y)) {
-      return;
-    }
+      if (this.state.actionMenuOpen && this.handleActionMenuClick(local.x, local.y)) {
+        return;
+      }
 
-    const position = this.getTilePositionFromLocal(local.x, local.y);
-    if (!position) {
-      return;
+      if (this.state.hireMenuOpen && this.handleHireMenuClick(local.x, local.y)) {
+        return;
+      }
+
+      if (this.state.contextMenuOpen && this.handleContextMenuClick(local.x, local.y)) {
+        return;
+      }
+
+      const position = this.getTilePositionFromLocal(local.x, local.y);
+      if (!position) {
+        return;
+      }
+      this.state.cursor.x = position.x;
+      this.state.cursor.y = position.y;
+      handleTileClick(this.state, position.x, position.y);
     }
-    this.state.cursor.x = position.x;
-    this.state.cursor.y = position.y;
-    handleTileClick(this.state, position.x, position.y);
+  };
+
+  private handleMouseLeave = (): void => {
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.canvas.style.cursor = '';
+    }
   };
 
   private handleContextMenu = (event: MouseEvent): void => {
