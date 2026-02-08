@@ -151,7 +151,7 @@ export class Game {
     }
 
     this.isDragging = false;
-    this.canvas.style.cursor = '';
+    this.canvas.style.cursor = 'grab';
 
     // If the user didn't drag, treat it as a click
     if (!this.hasDragged) {
@@ -190,7 +190,7 @@ export class Game {
   private handleMouseLeave = (): void => {
     if (this.isDragging) {
       this.isDragging = false;
-      this.canvas.style.cursor = '';
+      this.canvas.style.cursor = 'grab';
     }
   };
 
