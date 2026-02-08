@@ -639,9 +639,10 @@ export class Game {
         local.y - this.leftMouseDownPosition.y
       );
       // Start panning if dragged more than 5 pixels
-      if (dragDistance > 5) {
+      if (dragDistance > 5 && !this.isPanning) {
         this.hasMovedWhileDragging = true;
         this.isPanning = true;
+        this.lastPanPosition = local; // Set initial position when panning starts
       }
     }
     
@@ -702,7 +703,6 @@ export class Game {
     this.isLeftMouseDown = true;
     this.leftMouseDownPosition = local;
     this.hasMovedWhileDragging = false;
-    this.lastPanPosition = local;
     
     const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
     if (controller !== "Human") {
