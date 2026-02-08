@@ -62,6 +62,9 @@ export class Game {
   private effectCooldown = 0;
   private isPanning = false;
   private lastPanPosition: { x: number; y: number } | null = null;
+  private isLeftMouseDown = false;
+  private leftMouseDownPosition: { x: number; y: number } | null = null;
+  private hasMovedWhileDragging = false;
   private cpuActionCooldown = 0;
   private cpuFocusUnitId: number | null = null;
   private lastMousePosition: { x: number; y: number } | null = null;
@@ -173,7 +176,17 @@ export class Game {
         }
       }
     } else {
+      // Track cursor position before updateState to detect keyboard movement
+      const previousCursorX = this.state.cursor.x;
+      const previousCursorY = this.state.cursor.y;
+      
       updateState(this.state, this.input, true);
+      
+      // If cursor moved due to keyboard input, ensure it's visible
+      if (this.state.cursor.x !== previousCursorX || this.state.cursor.y !== previousCursorY) {
+        this.ensureCursorVisible();
+      }
+      
       if (this.autoMode) {
         this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
         if (!effectBlocking && this.cpuActionCooldown <= 0) {
@@ -298,9 +311,26 @@ export class Game {
     this.setZoom(this.zoom - direction * ZOOM_STEP);
   };
 
-  private handleMouseUp = (): void => {
+  private handleMouseUp = (event?: MouseEvent): void => {
+    // Handle left mouse button up - only trigger click if it wasn't a drag
+    if (this.isLeftMouseDown && event && event.button === 0) {
+      const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+      if (controller === "Human" && !this.hasMovedWhileDragging && !this.state.incomeResult) {
+        const local = this.getLocalPosition(event);
+        if (local) {
+          const position = this.getTilePositionFromLocal(local.x, local.y);
+          if (position) {
+            handleTileClick(this.state, position.x, position.y);
+          }
+        }
+      }
+    }
+    
     this.isPanning = false;
     this.lastPanPosition = null;
+    this.isLeftMouseDown = false;
+    this.leftMouseDownPosition = null;
+    this.hasMovedWhileDragging = false;
   };
 
   private setZoom(value: number): void {
@@ -387,6 +417,51 @@ export class Game {
     this.panX = desiredOffsetX - baseOffsetX;
     this.panY = desiredOffsetY - baseOffsetY;
     this.clampPan();
+  }
+
+  public ensureCursorVisible(): void {
+    const cursorX = this.state.cursor.x;
+    const cursorY = this.state.cursor.y;
+    const screenPos = this.getScreenPositionFromTile(cursorX, cursorY);
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const tileScreenSize = TILE_SIZE * this.zoom;
+    const margin = 32; // Margin from screen edge
+    
+    let needsScroll = false;
+    let targetPanX = this.panX;
+    let targetPanY = this.panY;
+    
+    // Check if cursor is outside visible area (with margin)
+    if (screenPos.x < margin) {
+      // Cursor is too far left
+      const diff = margin - screenPos.x;
+      targetPanX = this.panX + diff;
+      needsScroll = true;
+    } else if (screenPos.x + tileScreenSize > frameWidthPx - margin) {
+      // Cursor is too far right
+      const diff = (screenPos.x + tileScreenSize) - (frameWidthPx - margin);
+      targetPanX = this.panX - diff;
+      needsScroll = true;
+    }
+    
+    if (screenPos.y < margin) {
+      // Cursor is too far up
+      const diff = margin - screenPos.y;
+      targetPanY = this.panY + diff;
+      needsScroll = true;
+    } else if (screenPos.y + tileScreenSize > frameHeightPx - margin) {
+      // Cursor is too far down
+      const diff = (screenPos.y + tileScreenSize) - (frameHeightPx - margin);
+      targetPanY = this.panY - diff;
+      needsScroll = true;
+    }
+    
+    if (needsScroll) {
+      this.panX = targetPanX;
+      this.panY = targetPanY;
+      this.clampPan();
+    }
   }
 
   private handleEdgePan(delta: number): void {
@@ -556,6 +631,20 @@ export class Game {
     if (this.state.incomeResult) {
       return;
     }
+    
+    // Check if left mouse is down and should start panning
+    if (this.isLeftMouseDown && this.leftMouseDownPosition) {
+      const dragDistance = Math.hypot(
+        local.x - this.leftMouseDownPosition.x,
+        local.y - this.leftMouseDownPosition.y
+      );
+      // Start panning if dragged more than 5 pixels
+      if (dragDistance > 5) {
+        this.hasMovedWhileDragging = true;
+        this.isPanning = true;
+      }
+    }
+    
     if (this.isPanning) {
       if (this.lastPanPosition) {
         const deltaX = local.x - this.lastPanPosition.x;
@@ -587,10 +676,6 @@ export class Game {
       if (event.button === 0) {
         confirmIncomeResult(this.state);
       }
-    if (this.autoMode) {
-      this.lastMousePosition = local;
-      return;
-    }
       return;
     }
     if (event.button === 1) {
@@ -606,13 +691,21 @@ export class Game {
     if (event.button !== 0) {
       return;
     }
-    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
-    if (controller !== "Human") {
-      return;
-    }
-
+    
+    // Handle left mouse button
     const local = this.getLocalPosition(event);
     if (!local) {
+      return;
+    }
+    
+    // Track left mouse down for potential drag
+    this.isLeftMouseDown = true;
+    this.leftMouseDownPosition = local;
+    this.hasMovedWhileDragging = false;
+    this.lastPanPosition = local;
+    
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller !== "Human") {
       return;
     }
 
@@ -634,7 +727,7 @@ export class Game {
     }
     this.state.cursor.x = position.x;
     this.state.cursor.y = position.y;
-    handleTileClick(this.state, position.x, position.y);
+    // Don't handle tile click here - wait for mouse up to distinguish from drag
   };
 
   private handleContextMenu = (event: MouseEvent): void => {
