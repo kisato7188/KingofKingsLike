@@ -1,4 +1,4 @@
-import { SIDEBAR_WIDTH, TILE_SIZE } from "./constants";
+import { SIDEBAR_WIDTH, TILE_SIZE, VIEW_TILES_X, VIEW_TILES_Y } from "./constants";
 import { MapData } from "./types";
 
 export const boardToCanvas = (x: number, y: number): { x: number; y: number } => {
@@ -13,9 +13,17 @@ export const getTileIndex = (x: number, y: number, width: number): number => {
 };
 
 export const getViewportWidth = (map: MapData): number => {
-  return map.width * TILE_SIZE + SIDEBAR_WIDTH;
+  return VIEW_TILES_X * TILE_SIZE + SIDEBAR_WIDTH;
 };
 
 export const getViewportHeight = (map: MapData): number => {
-  return map.height * TILE_SIZE;
+  return VIEW_TILES_Y * TILE_SIZE;
+};
+
+export const getMapFrameWidth = (): number => {
+  return VIEW_TILES_X * TILE_SIZE;
+};
+
+export const getMapFrameHeight = (): number => {
+  return VIEW_TILES_Y * TILE_SIZE;
 };

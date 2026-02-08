@@ -16,6 +16,11 @@ turnEndButton?.addEventListener("click", () => {
   game.requestEndTurn();
 });
 
+const autoButton = document.getElementById("auto-button") as HTMLButtonElement | null;
+autoButton?.addEventListener("click", () => {
+  game.toggleAutoMode();
+});
+
 const baseUrl = import.meta.env.BASE_URL ?? "/";
 const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 const bgm = new Audio(`${normalizedBase}bgm.mp3`);
@@ -66,3 +71,15 @@ bgm.addEventListener("pause", () => {
     setStatus("停止中");
   }
 });
+
+let bgmStarted = false;
+const startBgmOnce = (): void => {
+  if (bgmStarted) {
+    return;
+  }
+  bgmStarted = true;
+  void playBgm();
+};
+
+window.addEventListener("pointerdown", startBgmOnce, { once: true });
+window.addEventListener("keydown", startBgmOnce, { once: true });

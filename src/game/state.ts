@@ -15,6 +15,9 @@ export type GameState = {
     x: number;
     y: number;
   };
+  cpuHireRemaining: number;
+  incomeResult: IncomeResult | null;
+  uiEffects: UiEffect[];
   turn: {
     factionIndex: number;
     currentFaction: FactionId;
@@ -28,6 +31,7 @@ export type GameState = {
   attackMode: boolean;
   actionMenuOpen: boolean;
   actionMenuIndex: number;
+  movementPaths: Map<number, Array<{ x: number; y: number }>>;
   contextMenuOpen: boolean;
   contextMenuIndex: number;
   contextMenuAnchor: { x: number; y: number } | null;
@@ -54,6 +58,33 @@ export type GameState = {
   incomePerCastle: number;
 };
 
+export type IncomeResult = {
+  factionId: FactionId;
+  towns: number;
+  castles: number;
+  total: number;
+  before: number;
+  after: number;
+  incomePerTown: number;
+  incomePerCastle: number;
+};
+
+export type UiEffect =
+  | { kind: "turn"; label: string; color: string }
+  | {
+      kind: "attack";
+      attackerType: UnitType;
+      defenderType: UnitType;
+      attackerFaction: FactionId;
+      defenderFaction: FactionId;
+      attackerHpBefore: number;
+      attackerHpAfter: number;
+      defenderHpBefore: number;
+      defenderHpAfter: number;
+    }
+  | { kind: "occupy"; label: string; color: string }
+  | { kind: "hire"; x: number; y: number };
+
 export const createInitialState = (): GameState => {
   const scenario = sampleScenario;
   const initialFaction = getFirstActiveFaction(scenario);
@@ -61,6 +92,9 @@ export const createInitialState = (): GameState => {
     scenario,
     config: createDefaultConfig(),
     cursor: { x: 0, y: 0 },
+    cpuHireRemaining: 1,
+    incomeResult: null,
+    uiEffects: [],
     turn: {
       factionIndex: 0,
       currentFaction: initialFaction,
@@ -74,6 +108,7 @@ export const createInitialState = (): GameState => {
     attackMode: false,
     actionMenuOpen: false,
     actionMenuIndex: 0,
+    movementPaths: new Map<number, Array<{ x: number; y: number }>>(),
     contextMenuOpen: false,
     contextMenuIndex: 0,
     contextMenuAnchor: null,
@@ -95,14 +130,14 @@ export const createInitialState = (): GameState => {
     levelBonusAttack: 1,
     applyDefenderLevelBonus: false,
     budgets: {
-      [FactionId.Blue]: 0,
-      [FactionId.Red]: 0,
-      [FactionId.Yellow]: 0,
-      [FactionId.Green]: 0,
+      [FactionId.Blue]: 300,
+      [FactionId.Red]: 300,
+      [FactionId.Yellow]: 300,
+      [FactionId.Green]: 300,
     },
-    baseIncome: 100,
-    incomePerTown: 20,
-    incomePerCastle: 50,
+    baseIncome: 0,
+    incomePerTown: 50,
+    incomePerCastle: 200,
   };
   startTurn(initialState);
   return initialState;
@@ -111,6 +146,13 @@ export const createInitialState = (): GameState => {
 export const updateState = (state: GameState, input: Input, allowHumanActions = true): void => {
   state.magicError = null;
   handleControllerToggle(state, input);
+
+  if (state.incomeResult) {
+    if (input.isPressed("Enter") || input.isPressed("Space")) {
+      confirmIncomeResult(state);
+    }
+    return;
+  }
 
   if (!allowHumanActions) {
     return;
@@ -200,9 +242,12 @@ export const updateState = (state: GameState, input: Input, allowHumanActions = 
   }
 
   if (input.isPressed("KeyA")) {
-    if (state.selectedUnitId !== null && hasAdjacentEnemy(state, state.selectedUnitId)) {
-      state.attackMode = true;
-      state.movementRange = null;
+    if (state.selectedUnitId !== null) {
+      const attacker = state.units.find((entry) => entry.id === state.selectedUnitId);
+      if (attacker && hasEnemyInAttackRange(state, attacker)) {
+        state.attackMode = true;
+        state.movementRange = null;
+      }
     }
   }
 
@@ -288,18 +333,41 @@ export const clearSelection = (state: GameState): void => {
   state.magicMode = false;
 };
 
-const startTurn = (state: GameState): void => {
+const resetTurnUnits = (state: GameState): void => {
   for (const unit of state.units) {
     if (unit.faction === state.turn.currentFaction) {
       unit.acted = false;
       unit.movedThisTurn = false;
     }
   }
-  const income = calcIncome(state.turn.currentFaction, state.map, state.baseIncome, state.incomePerTown, state.incomePerCastle);
-  state.budgets[state.turn.currentFaction] += income.total;
+  state.cpuHireRemaining = 1;
+};
+
+const applyTurnIncome = (state: GameState, factionId: FactionId): IncomeResult => {
+  const income = calcIncome(factionId, state.map, state.baseIncome, state.incomePerTown, state.incomePerCastle);
+  const before = state.budgets[factionId] ?? 0;
+  const after = before + income.total;
+  state.budgets[factionId] = after;
   console.log(
-    `Income: base ${income.base} + towns ${income.towns}*${state.incomePerTown} + castles ${income.castles}*${state.incomePerCastle} = ${income.total}`,
+    `Income: towns ${income.towns}*${state.incomePerTown} + castles ${income.castles}*${state.incomePerCastle} = ${income.total}`,
   );
+  return {
+    factionId,
+    towns: income.towns,
+    castles: income.castles,
+    total: income.total,
+    before,
+    after,
+    incomePerTown: state.incomePerTown,
+    incomePerCastle: state.incomePerCastle,
+  };
+};
+
+const startTurn = (state: GameState, applyIncome = true): void => {
+  resetTurnUnits(state);
+  if (applyIncome) {
+    applyTurnIncome(state, state.turn.currentFaction);
+  }
   const factionName = state.factions.find((faction) => faction.id === state.turn.currentFaction)?.name ?? "Unknown";
   console.debug(`Turn Start: ${factionName}`);
 };
@@ -323,7 +391,19 @@ export const endTurn = (state: GameState): void => {
   state.hirePlacementOriginId = null;
   state.hireMenuOpen = false;
   state.magicMode = false;
-  startTurn(state);
+  state.incomeResult = applyTurnIncome(state, state.turn.currentFaction);
+};
+
+export const confirmIncomeResult = (state: GameState): void => {
+  if (!state.incomeResult) {
+    return;
+  }
+  state.incomeResult = null;
+  startTurn(state, false);
+  const controller = state.config.controllers[state.turn.currentFaction] ?? "Human";
+  const isPlayer = controller === "Human";
+  const label = isPlayer ? "Player Turn" : "Enemy Turn";
+  state.uiEffects.push({ kind: "turn", label, color: isPlayer ? "#4dabf7" : "#ff6b6b" });
 };
 
 export const getUnitAt = (state: GameState, x: number, y: number): Unit | undefined => {
@@ -336,7 +416,7 @@ const clamp = (value: number, min: number, max: number): number => {
 
 export const getMovementRange = (state: GameState, unit: Unit): ReachableResult => {
   const enemyZoc = getEnemyZocTiles(state.units, unit.faction, state.map.width, state.map.height);
-  return findReachableTiles({
+  const result = findReachableTiles({
     width: state.map.width,
     height: state.map.height,
     startX: unit.x,
@@ -344,10 +424,96 @@ export const getMovementRange = (state: GameState, unit: Unit): ReachableResult 
     maxCost: unit.movePoints,
     maxSteps: unit.food,
     toIndex: (x, y) => getTileIndex(x, y, state.map.width),
-    isPassable: (x, y) => !isOccupied(state, x, y, unit.id),
+    isPassable: (x, y) => !isOccupiedByEnemy(state, x, y, unit),
     shouldStopAt: (x, y) => isBlockedByZoc(enemyZoc, x, y, unit, state.map.width),
     getMoveCost: (x, y) => getMoveCostForTile(state, x, y),
   });
+  for (const other of state.units) {
+    if (other.id === unit.id || other.faction !== unit.faction) {
+      continue;
+    }
+    result.reachable.delete(getTileIndex(other.x, other.y, state.map.width));
+  }
+  return result;
+};
+
+const buildMovePath = (
+  state: GameState,
+  unit: Unit,
+  targetX: number,
+  targetY: number,
+  range: ReachableResult,
+): Array<{ x: number; y: number }> | null => {
+  const startX = unit.x;
+  const startY = unit.y;
+  if (startX === targetX && startY === targetY) {
+    return [{ x: startX, y: startY }];
+  }
+
+  const width = state.map.width;
+  const targetIndex = getTileIndex(targetX, targetY, width);
+  const targetSteps = range.steps.get(targetIndex);
+  const targetCost = range.costs.get(targetIndex);
+  if (targetSteps === undefined || targetCost === undefined) {
+    return null;
+  }
+
+  const path: Array<{ x: number; y: number }> = [{ x: targetX, y: targetY }];
+  let currentX = targetX;
+  let currentY = targetY;
+  let currentSteps = targetSteps;
+  let currentCost = targetCost;
+  const visited = new Set<number>();
+
+  while (!(currentX === startX && currentY === startY)) {
+    const currentIndex = getTileIndex(currentX, currentY, width);
+    if (visited.has(currentIndex)) {
+      return null;
+    }
+    visited.add(currentIndex);
+
+    const neighbors = [
+      { x: currentX + 1, y: currentY },
+      { x: currentX - 1, y: currentY },
+      { x: currentX, y: currentY + 1 },
+      { x: currentX, y: currentY - 1 },
+    ];
+
+    const stepCost = getMoveCostForTile(state, currentX, currentY);
+    let found = false;
+
+    for (const next of neighbors) {
+      if (next.x < 0 || next.y < 0 || next.x >= width || next.y >= state.map.height) {
+        continue;
+      }
+      const nextIndex = getTileIndex(next.x, next.y, width);
+      const nextSteps = range.steps.get(nextIndex);
+      const nextCost = range.costs.get(nextIndex);
+      if (nextSteps === undefined || nextCost === undefined) {
+        continue;
+      }
+      if (nextSteps !== currentSteps - 1) {
+        continue;
+      }
+      if (nextCost + stepCost !== currentCost) {
+        continue;
+      }
+
+      path.push({ x: next.x, y: next.y });
+      currentX = next.x;
+      currentY = next.y;
+      currentSteps = nextSteps;
+      currentCost = nextCost;
+      found = true;
+      break;
+    }
+
+    if (!found) {
+      return null;
+    }
+  }
+
+  return path.reverse();
 };
 
 const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number): void => {
@@ -381,14 +547,16 @@ const tryMoveSelectedUnit = (state: GameState, targetX: number, targetY: number)
     return;
   }
 
+  const path = buildMovePath(state, unit, targetX, targetY, state.movementRange);
+  if (path) {
+    state.movementPaths.set(unit.id, path);
+  }
+
   unit.x = targetX;
   unit.y = targetY;
   unit.food = Math.max(0, unit.food - steps);
   unit.movedThisTurn = true;
-  const occupied = occupyIfPossible(state, unit);
-  if (occupied) {
-    unit.acted = true;
-  }
+  occupyIfPossible(state, unit);
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
@@ -419,14 +587,15 @@ export const moveUnitTo = (state: GameState, unitId: number, targetX: number, ta
   if (unit.x === targetX && unit.y === targetY) {
     return false;
   }
+  const path = buildMovePath(state, unit, targetX, targetY, range);
+  if (path) {
+    state.movementPaths.set(unit.id, path);
+  }
   unit.x = targetX;
   unit.y = targetY;
   unit.food = Math.max(0, unit.food - steps);
   unit.movedThisTurn = true;
-  const occupied = occupyIfPossible(state, unit);
-  if (occupied) {
-    unit.acted = true;
-  }
+  occupyIfPossible(state, unit);
   return true;
 };
 
@@ -478,8 +647,6 @@ const tryOccupyAtCursor = (state: GameState): void => {
   if (!occupyIfPossible(state, unit)) {
     return;
   }
-
-  unit.acted = true;
   state.selectedUnitId = null;
   state.movementRange = null;
   state.attackMode = false;
@@ -495,7 +662,6 @@ export const occupyUnit = (state: GameState, unitId: number): boolean => {
   if (!occupyIfPossible(state, unit)) {
     return false;
   }
-  unit.acted = true;
   return true;
 };
 
@@ -557,7 +723,7 @@ const tryAttackAtCursor = (state: GameState): void => {
     unit.faction !== attacker.faction &&
     unit.x === state.cursor.x &&
     unit.y === state.cursor.y &&
-    isAdjacent(attacker.x, attacker.y, unit.x, unit.y),
+    isInAttackRange(attacker, unit.x, unit.y),
   );
 
   if (defenderIndex === -1) {
@@ -583,7 +749,7 @@ export const attackUnit = (state: GameState, attackerId: number, defenderId: num
   if (attacker.acted || attacker.faction === defender.faction) {
     return false;
   }
-  if (!isAdjacent(attacker.x, attacker.y, defender.x, defender.y)) {
+  if (!isInAttackRange(attacker, defender.x, defender.y)) {
     return false;
   }
   resolveBattle(state, attackerIndex, defenderIndex);
@@ -598,6 +764,17 @@ const resolveBattle = (state: GameState, attackerIndex: number, defenderIndex: n
     levelBonusAttack: state.levelBonusAttack,
     applyDefenderLevelBonus: state.applyDefenderLevelBonus,
     affinityMultiplier: state.expAffinity,
+  });
+  state.uiEffects.push({
+    kind: "attack",
+    attackerType: attacker.type,
+    defenderType: defender.type,
+    attackerFaction: attacker.faction,
+    defenderFaction: defender.faction,
+    attackerHpBefore: attacker.hp,
+    attackerHpAfter: result.attacker.hp,
+    defenderHpBefore: defender.hp,
+    defenderHpAfter: result.defender.hp,
   });
   for (const line of result.log) {
     console.log(line);
@@ -641,20 +818,30 @@ const isOccupied = (state: GameState, x: number, y: number, ignoreId?: number): 
   return state.units.some((unit) => unit.id !== ignoreId && unit.x === x && unit.y === y);
 };
 
-const hasAdjacentEnemy = (state: GameState, unitId: number): boolean => {
-  const unit = state.units.find((entry) => entry.id === unitId);
-  if (!unit) {
-    return false;
-  }
-  return state.units.some((other) =>
-    other.faction !== unit.faction && isAdjacent(unit.x, unit.y, other.x, other.y),
-  );
+const isOccupiedByEnemy = (state: GameState, x: number, y: number, unit: Unit): boolean => {
+  return state.units.some((other) => other.faction !== unit.faction && other.x === x && other.y === y);
 };
 
-const isAdjacent = (ax: number, ay: number, bx: number, by: number): boolean => {
-  const dx = Math.abs(ax - bx);
-  const dy = Math.abs(ay - by);
-  return dx <= 1 && dy <= 1 && (dx + dy) > 0;
+export const getAttackRange = (unit: Unit): number => {
+  if (unit.type === UnitType.Archer || unit.type === UnitType.Mage || unit.type === UnitType.Wizard) {
+    return 3;
+  }
+  return 1;
+};
+
+export const isInAttackRange = (attacker: Unit, targetX: number, targetY: number): boolean => {
+  const dx = Math.abs(attacker.x - targetX);
+  const dy = Math.abs(attacker.y - targetY);
+  if (dx === 0 && dy === 0) {
+    return false;
+  }
+  return dx + dy <= getAttackRange(attacker);
+};
+
+const hasEnemyInAttackRange = (state: GameState, attacker: Unit): boolean => {
+  return state.units.some((other) =>
+    other.faction !== attacker.faction && isInAttackRange(attacker, other.x, other.y),
+  );
 };
 
 export const getEnemyZocTiles = (
@@ -823,6 +1010,7 @@ const hireUnitAtPosition = (state: GameState, king: Unit, unitType: UnitType, x:
     maxHp: entry.maxHp,
   });
   state.nextUnitId += 1;
+  state.uiEffects.push({ kind: "hire", x, y });
   return true;
 };
 
@@ -904,7 +1092,7 @@ export const getActionMenuOptions = (state: GameState, unit: Unit): ActionMenuOp
   if (!unit.movedThisTurn && unit.food > 0) {
     options.push({ key: "Move", label: "移動" });
   }
-  if (hasAdjacentEnemy(state, unit.id)) {
+  if (hasEnemyInAttackRange(state, unit)) {
     options.push({ key: "Attack", label: "攻撃" });
   }
   if (isCaster(unit)) {
@@ -1132,20 +1320,60 @@ const tryCastSpellAtCursor = (state: GameState): void => {
     return;
   }
 
-  const targetIndex = state.units.findIndex((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
-  if (targetIndex === -1) {
-    return;
-  }
+  const isAreaCaster = caster.type === UnitType.Mage || caster.type === UnitType.Wizard;
+  if (isAreaCaster) {
+    const cursorX = state.cursor.x;
+    const cursorY = state.cursor.y;
+    if (!isInRangeToPos(caster, cursorX, cursorY, spell.range)) {
+      return;
+    }
 
-  const target = state.units[targetIndex];
-  if (!isValidSpellTarget(caster, target, spell)) {
-    return;
-  }
+    const affected = new Set<string>();
+    const maxOffset = 1;
+    for (let offset = -maxOffset; offset <= maxOffset; offset += 1) {
+      const x = cursorX + offset;
+      const y = cursorY + offset;
+      if (x >= 0 && x < state.map.width) {
+        affected.add(`${x},${cursorY}`);
+      }
+      if (y >= 0 && y < state.map.height) {
+        affected.add(`${cursorX},${y}`);
+      }
+    }
 
-  const updatedTarget = spell.effect(caster, target);
-  state.units[targetIndex] = updatedTarget;
-  state.units[casterIndex].acted = true;
-  console.log(`${caster.type} casts ${spell.name} on ${target.type}`);
+    const updatedUnits: Unit[] = [];
+    for (const unit of state.units) {
+      if (unit.faction !== caster.faction && affected.has(`${unit.x},${unit.y}`)) {
+        const updated = spell.effect(caster, unit);
+        if (updated.hp > 0) {
+          updatedUnits.push(updated);
+        }
+      } else {
+        updatedUnits.push(unit);
+      }
+    }
+    state.units = updatedUnits;
+    const casterAfterIndex = state.units.findIndex((unit) => unit.id === caster.id);
+    if (casterAfterIndex !== -1) {
+      state.units[casterAfterIndex].acted = true;
+    }
+    console.log(`${caster.type} casts ${spell.name}`);
+  } else {
+    const targetIndex = state.units.findIndex((unit) => unit.x === state.cursor.x && unit.y === state.cursor.y);
+    if (targetIndex === -1) {
+      return;
+    }
+
+    const target = state.units[targetIndex];
+    if (!isValidSpellTarget(caster, target, spell)) {
+      return;
+    }
+
+    const updatedTarget = spell.effect(caster, target);
+    state.units[targetIndex] = updatedTarget;
+    state.units[casterIndex].acted = true;
+    console.log(`${caster.type} casts ${spell.name} on ${target.type}`);
+  }
 
   state.selectedUnitId = null;
   state.movementRange = null;
@@ -1174,6 +1402,12 @@ const isValidSpellTarget = (caster: Unit, target: Unit, spell: Spell): boolean =
 const isInRange = (caster: Unit, target: Unit, range: number): boolean => {
   const dx = Math.abs(caster.x - target.x);
   const dy = Math.abs(caster.y - target.y);
+  return dx + dy <= range;
+};
+
+const isInRangeToPos = (caster: Unit, targetX: number, targetY: number, range: number): boolean => {
+  const dx = Math.abs(caster.x - targetX);
+  const dy = Math.abs(caster.y - targetY);
   return dx + dy <= range;
 };
 
@@ -1358,7 +1592,12 @@ export const canOccupy = (unit: Unit, tile: { type: TileType; ownerFaction?: Fac
     return unit.type === UnitType.King;
   }
 
-  return unit.type === UnitType.King || unit.type === UnitType.Fighter || unit.type === UnitType.Wizard;
+  return (
+    unit.type === UnitType.King ||
+    unit.type === UnitType.Fighter ||
+    unit.type === UnitType.Archer ||
+    unit.type === UnitType.Wizard
+  );
 };
 
 const occupyIfPossible = (state: GameState, unit: Unit): boolean => {
@@ -1366,6 +1605,16 @@ const occupyIfPossible = (state: GameState, unit: Unit): boolean => {
   if (!canOccupy(unit, tile)) {
     return false;
   }
+  const wasOwnedBy = tile.ownerFaction;
   tile.ownerFaction = unit.faction;
+  if (tile.type === TileType.Town && wasOwnedBy !== unit.faction) {
+    const controller = state.config.controllers[unit.faction] ?? "Human";
+    const isPlayer = controller === "Human";
+    state.uiEffects.push({
+      kind: "occupy",
+      label: isPlayer ? "街を占拠しました！" : "街が占拠されました！",
+      color: isPlayer ? "#4dabf7" : "#ff6b6b",
+    });
+  }
   return true;
 };

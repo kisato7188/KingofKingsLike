@@ -1,13 +1,24 @@
 import { Input } from "./Input";
-import { getViewportHeight, getViewportWidth } from "./geometry";
-import { render } from "./render";
-import { TILE_SIZE } from "./constants";
+import { getMapFrameHeight, getMapFrameWidth, getViewportHeight, getViewportWidth } from "./geometry";
+import { MapView, render, UnitDrawPositions } from "./render";
+import {
+  ACTION_MENU_WIDTH,
+  HIRE_MENU_WIDTH,
+  MENU_EDGE_PADDING,
+  MENU_ITEM_TOP,
+  MENU_PADDING_Y,
+  MENU_PANEL_MARGIN,
+  MENU_ROW_HEIGHT,
+  MENU_UNIT_OFFSET,
+  TILE_SIZE,
+} from "./constants";
 import {
   applyActionMenuSelection,
   applyContextMenuSelection,
   applyHireMenuSelection,
   canHireUnitType,
   clearSelection,
+  confirmIncomeResult,
   createInitialState,
   endTurn,
   getActionMenuOptions,
@@ -15,9 +26,26 @@ import {
   openContextMenu,
   updateState,
   GameState,
+  UiEffect,
 } from "./state";
-import { runCpuTurn } from "./ai/cpuController";
+import { runCpuTurnStep } from "./ai/cpuController";
 import { hireableUnits } from "./unitCatalog";
+import { UnitType } from "./types";
+
+type UnitAnimation = {
+  path: Array<{ x: number; y: number }>;
+  segmentIndex: number;
+  elapsed: number;
+  duration: number;
+};
+
+const MOVE_SECONDS_PER_TILE = 0.2;
+const MIN_MOVE_DURATION = 0.05;
+const ZOOM_STEP = 0.1;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.5;
+const EFFECT_DURATION = 1.5;
+const CPU_STEP_DELAY = 1;
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -25,12 +53,6 @@ export class Game {
   private readonly input: Input;
   private state: GameState;
   private lastTime = 0;
-  private isDragging = false;
-  private dragStartX = 0;
-  private dragStartY = 0;
-  private dragScrollLeft = 0;
-  private dragScrollTop = 0;
-  private hasDragged = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -50,6 +72,13 @@ export class Game {
     this.canvas.addEventListener("mouseup", this.handleMouseUp);
     this.canvas.addEventListener("mouseleave", this.handleMouseLeave);
     this.canvas.addEventListener("contextmenu", this.handleContextMenu);
+    this.canvas.addEventListener("wheel", this.handleWheel, { passive: false });
+    this.canvas.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener("mouseleave", this.handleMouseUp);
+
+    for (const unit of this.state.units) {
+      this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+    }
   }
 
   start(): void {
@@ -61,8 +90,23 @@ export class Game {
     if (controller !== "Human") {
       return;
     }
+    this.autoMode = false;
     clearSelection(this.state);
     endTurn(this.state);
+  }
+
+  toggleAutoMode(): boolean {
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller !== "Human") {
+      this.autoMode = false;
+      return this.autoMode;
+    }
+    this.autoMode = !this.autoMode;
+    if (!this.autoMode) {
+      this.cpuFocusUnitId = null;
+      this.cpuActionCooldown = 0;
+    }
+    return this.autoMode;
   }
 
   private loop = (time: number): void => {
@@ -75,22 +119,417 @@ export class Game {
     requestAnimationFrame(this.loop);
   };
 
-  private update(_delta: number): void {
+  private update(delta: number): void {
+    const previousPositions = new Map(this.unitLastPositions);
     const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if (controller === "CPU" && this.state.incomeResult) {
+      confirmIncomeResult(this.state);
+    }
+    const effectBlocking =
+      this.activeEffect !== null ||
+      this.state.uiEffects.length > 0 ||
+      this.unitAnimations.size > 0 ||
+      this.state.incomeResult !== null ||
+      this.effectCooldown > 0;
     if (controller === "CPU") {
+      this.autoMode = false;
       updateState(this.state, this.input, false);
       const updated = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
       if (updated === "CPU") {
-        runCpuTurn(this.state);
+        this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
+        if (!effectBlocking && this.cpuActionCooldown <= 0) {
+          const result = runCpuTurnStep(this.state, {
+            lockKingOnCastle: true,
+          });
+          if (result.focusUnitId !== undefined) {
+            this.cpuFocusUnitId = result.focusUnitId;
+            const focusUnit = this.state.units.find((unit) => unit.id === result.focusUnitId);
+            if (focusUnit) {
+              this.state.cursor.x = focusUnit.x;
+              this.state.cursor.y = focusUnit.y;
+            }
+          }
+          if (result.acted) {
+            this.cpuActionCooldown = CPU_STEP_DELAY;
+          }
+          if (result.turnEnded) {
+            this.cpuFocusUnitId = null;
+          }
+        }
       }
     } else {
       updateState(this.state, this.input, true);
+      if (this.autoMode) {
+        this.cpuActionCooldown = Math.max(0, this.cpuActionCooldown - delta);
+        if (!effectBlocking && this.cpuActionCooldown <= 0) {
+          const result = runCpuTurnStep(this.state, {
+            factionId: this.state.turn.currentFaction,
+            skipUnit: (unit) => unit.type === UnitType.King,
+            allowEndTurn: false,
+            allowHire: false,
+          });
+          if (result.focusUnitId !== undefined) {
+            this.cpuFocusUnitId = result.focusUnitId;
+          }
+          if (result.acted) {
+            this.cpuActionCooldown = CPU_STEP_DELAY;
+          } else {
+            this.autoMode = false;
+            this.cpuFocusUnitId = null;
+          }
+        }
+      } else {
+        this.cpuActionCooldown = 0;
+        this.cpuFocusUnitId = null;
+      }
     }
+    this.handleZoomInput();
+    this.handleEdgePan(delta);
     this.input.endFrame();
+    this.syncUnitAnimations(previousPositions, delta);
+    this.updateEffects(delta);
+    this.updatePlayerTurnFocus(controller);
+    this.updateCpuCameraFocus();
+  }
+
+  private updatePlayerTurnFocus(controller: string): void {
+    const currentFaction = this.state.turn.currentFaction;
+    const turnChanged = this.lastTurnFaction !== currentFaction || this.lastTurnController !== controller;
+    this.lastTurnFaction = currentFaction;
+    this.lastTurnController = controller;
+
+    if (!turnChanged || controller !== "Human") {
+      return;
+    }
+
+    const king = this.state.units.find(
+      (unit) => unit.faction === currentFaction && unit.type === UnitType.King,
+    );
+    if (!king) {
+      return;
+    }
+    this.centerOnMapPosition(king.x * TILE_SIZE + TILE_SIZE / 2, king.y * TILE_SIZE + TILE_SIZE / 2);
   }
 
   private render(): void {
-    render(this.ctx, this.state);
+    render(
+      this.ctx,
+      this.state,
+      this.getUnitDrawPositions(),
+      this.getMapView(),
+      this.getEffectState(),
+      new Set(this.unitAnimations.keys()),
+    );
+  }
+
+  private updateEffects(delta: number): void {
+    if (this.effectCooldown > 0) {
+      this.effectCooldown = Math.max(0, this.effectCooldown - delta);
+      return;
+    }
+    if (this.unitAnimations.size > 0) {
+      return;
+    }
+    if (!this.activeEffect && this.state.uiEffects.length > 0) {
+      this.activeEffect = this.state.uiEffects.shift() ?? null;
+      this.effectElapsed = 0;
+      this.activeEffectDuration = this.activeEffect ? this.getEffectDuration(this.activeEffect) : EFFECT_DURATION;
+    }
+
+    if (!this.activeEffect) {
+      return;
+    }
+
+    this.effectElapsed += delta;
+    if (this.effectElapsed >= this.activeEffectDuration) {
+      if (this.activeEffect?.kind === "attack") {
+        this.effectCooldown = 1;
+      }
+      this.activeEffect = null;
+      this.effectElapsed = 0;
+      this.activeEffectDuration = EFFECT_DURATION;
+    }
+  }
+
+  private getEffectState(): { effect: UiEffect; elapsed: number; duration: number } | null {
+    if (!this.activeEffect) {
+      return null;
+    }
+    return { effect: this.activeEffect, elapsed: this.effectElapsed, duration: this.activeEffectDuration };
+  }
+
+  private getEffectDuration(effect: UiEffect): number {
+    if (effect.kind === "hire") {
+      return 0.6;
+    }
+    return EFFECT_DURATION;
+  }
+
+  private handleZoomInput(): void {
+    if (this.input.isPressed("Equal") || this.input.isPressed("NumpadAdd")) {
+      this.setZoom(this.zoom + ZOOM_STEP);
+    }
+    if (this.input.isPressed("Minus") || this.input.isPressed("NumpadSubtract")) {
+      this.setZoom(this.zoom - ZOOM_STEP);
+    }
+  }
+
+  private handleWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    if (event.deltaY === 0) {
+      return;
+    }
+    const direction = Math.sign(event.deltaY);
+    this.setZoom(this.zoom - direction * ZOOM_STEP);
+  };
+
+  private handleMouseUp = (): void => {
+    this.isPanning = false;
+    this.lastPanPosition = null;
+  };
+
+  private setZoom(value: number): void {
+    this.zoom = this.clamp(value, MIN_ZOOM, MAX_ZOOM);
+    this.clampPan();
+  }
+
+  private getMapView(): MapView {
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(frameWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(frameHeightPx, scaledHeight);
+    const offsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
+    const offsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
+    return { zoom: this.zoom, offsetX, offsetY };
+  }
+
+  private getPanLimits(frameSize: number, scaledSize: number): { min: number; max: number } {
+    const overscroll = TILE_SIZE * 2;
+    const min = Math.min(0, frameSize - scaledSize) - overscroll;
+    const max = Math.max(0, frameSize - scaledSize) + overscroll;
+    return { min, max };
+  }
+
+  private clampPan(): void {
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const limitX = this.getPanLimits(frameWidthPx, scaledWidth);
+    const limitY = this.getPanLimits(frameHeightPx, scaledHeight);
+    const clampedOffsetX = this.clamp(baseOffsetX + this.panX, limitX.min, limitX.max);
+    const clampedOffsetY = this.clamp(baseOffsetY + this.panY, limitY.min, limitY.max);
+    this.panX = clampedOffsetX - baseOffsetX;
+    this.panY = clampedOffsetY - baseOffsetY;
+  }
+
+  private adjustPan(deltaX: number, deltaY: number): void {
+    this.panX += deltaX;
+    this.panY += deltaY;
+    this.clampPan();
+  }
+
+  private updateCpuCameraFocus(): void {
+    const controller = this.state.config.controllers[this.state.turn.currentFaction] ?? "Human";
+    if ((controller !== "CPU" && !this.autoMode) || this.cpuFocusUnitId === null) {
+      return;
+    }
+    const position = this.getUnitDrawPosition(this.cpuFocusUnitId);
+    if (!position) {
+      return;
+    }
+    const focusUnit = this.state.units.find((unit) => unit.id === this.cpuFocusUnitId);
+    if (focusUnit) {
+      this.state.cursor.x = focusUnit.x;
+      this.state.cursor.y = focusUnit.y;
+    }
+    this.centerOnMapPosition(position.x * TILE_SIZE + TILE_SIZE / 2, position.y * TILE_SIZE + TILE_SIZE / 2);
+  }
+
+  private centerOnMapPosition(mapX: number, mapY: number): void {
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const scaledX = mapX * this.zoom;
+    const scaledY = mapY * this.zoom;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    const scaledWidth = mapWidthPx * this.zoom;
+    const scaledHeight = mapHeightPx * this.zoom;
+    const baseOffsetX = (frameWidthPx - scaledWidth) / 2;
+    const baseOffsetY = (frameHeightPx - scaledHeight) / 2;
+    const desiredOffsetX = frameWidthPx / 2 - scaledX;
+    const desiredOffsetY = frameHeightPx / 2 - scaledY;
+    this.panX = desiredOffsetX - baseOffsetX;
+    this.panY = desiredOffsetY - baseOffsetY;
+    this.clampPan();
+  }
+
+  private handleEdgePan(delta: number): void {
+    if (!this.lastMousePosition || this.isPanning) {
+      return;
+    }
+
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const edgeThreshold = 24;
+    const speed = 360;
+    const { x, y } = this.lastMousePosition;
+    if (x < 0 || y < 0 || x > frameWidthPx || y > frameHeightPx) {
+      return;
+    }
+
+    let deltaX = 0;
+    let deltaY = 0;
+
+    if (x <= edgeThreshold) {
+      deltaX += speed * delta;
+    } else if (x >= frameWidthPx - edgeThreshold) {
+      deltaX -= speed * delta;
+    }
+
+    if (y <= edgeThreshold) {
+      deltaY += speed * delta;
+    } else if (y >= frameHeightPx - edgeThreshold) {
+      deltaY -= speed * delta;
+    }
+
+    if (deltaX !== 0 || deltaY !== 0) {
+      this.adjustPan(deltaX, deltaY);
+    }
+  }
+
+  private getScreenPositionFromTile(x: number, y: number): { x: number; y: number } {
+    const view = this.getMapView();
+    const mapX = x * TILE_SIZE;
+    const mapY = y * TILE_SIZE;
+    return {
+      x: view.offsetX + mapX * view.zoom,
+      y: view.offsetY + mapY * view.zoom,
+    };
+  }
+
+  private getMapLocalPosition(localX: number, localY: number): { x: number; y: number } | null {
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    if (localX < 0 || localY < 0 || localX >= frameWidthPx || localY >= frameHeightPx) {
+      return null;
+    }
+    const view = this.getMapView();
+    const mapX = (localX - view.offsetX) / view.zoom;
+    const mapY = (localY - view.offsetY) / view.zoom;
+    const mapWidthPx = this.state.map.width * TILE_SIZE;
+    const mapHeightPx = this.state.map.height * TILE_SIZE;
+    if (mapX < 0 || mapY < 0 || mapX >= mapWidthPx || mapY >= mapHeightPx) {
+      return null;
+    }
+    return { x: mapX, y: mapY };
+  }
+
+  private syncUnitAnimations(previousPositions: Map<number, { x: number; y: number }>, delta: number): void {
+    if (this.state.movementPaths.size > 0) {
+      for (const [unitId, path] of this.state.movementPaths.entries()) {
+        if (path.length >= 2) {
+          this.unitAnimations.set(unitId, {
+            path,
+            segmentIndex: 0,
+            elapsed: 0,
+            duration: MOVE_SECONDS_PER_TILE,
+          });
+        }
+      }
+      this.state.movementPaths.clear();
+    }
+
+    for (const [unitId, anim] of this.unitAnimations.entries()) {
+      anim.elapsed += delta;
+      while (anim.elapsed >= anim.duration) {
+        if (anim.segmentIndex < anim.path.length - 2) {
+          anim.elapsed -= anim.duration;
+          anim.segmentIndex += 1;
+        } else {
+          this.unitAnimations.delete(unitId);
+          break;
+        }
+      }
+    }
+
+    const seenUnits = new Set<number>();
+
+    for (const unit of this.state.units) {
+      seenUnits.add(unit.id);
+      const previous = previousPositions.get(unit.id);
+      if (!previous) {
+        this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+        continue;
+      }
+      if ((previous.x !== unit.x || previous.y !== unit.y) && !this.unitAnimations.has(unit.id)) {
+        const distance = Math.abs(unit.x - previous.x) + Math.abs(unit.y - previous.y);
+        const duration = Math.max(MIN_MOVE_DURATION, distance * MOVE_SECONDS_PER_TILE);
+        this.unitAnimations.set(unit.id, {
+          path: [
+            { x: previous.x, y: previous.y },
+            { x: unit.x, y: unit.y },
+          ],
+          segmentIndex: 0,
+          elapsed: 0,
+          duration,
+        });
+      }
+      this.unitLastPositions.set(unit.id, { x: unit.x, y: unit.y });
+    }
+
+    for (const unitId of Array.from(this.unitLastPositions.keys())) {
+      if (!seenUnits.has(unitId)) {
+        this.unitLastPositions.delete(unitId);
+        this.unitAnimations.delete(unitId);
+      }
+    }
+  }
+
+  private getUnitDrawPositions(): UnitDrawPositions {
+    const positions: UnitDrawPositions = new Map();
+    for (const unit of this.state.units) {
+      const anim = this.unitAnimations.get(unit.id);
+      if (!anim) {
+        positions.set(unit.id, { x: unit.x, y: unit.y });
+        continue;
+      }
+      const progress = Math.min(1, anim.elapsed / anim.duration);
+      const from = anim.path[anim.segmentIndex] ?? { x: unit.x, y: unit.y };
+      const to = anim.path[anim.segmentIndex + 1] ?? from;
+      const x = from.x + (to.x - from.x) * progress;
+      const y = from.y + (to.y - from.y) * progress;
+      positions.set(unit.id, { x, y });
+    }
+    return positions;
+  }
+
+  private getUnitDrawPosition(unitId: number): { x: number; y: number } | null {
+    const unit = this.state.units.find((entry) => entry.id === unitId);
+    if (!unit) {
+      return null;
+    }
+    const anim = this.unitAnimations.get(unitId);
+    if (!anim) {
+      return { x: unit.x, y: unit.y };
+    }
+    const progress = Math.min(1, anim.elapsed / anim.duration);
+    const from = anim.path[anim.segmentIndex] ?? { x: unit.x, y: unit.y };
+    const to = anim.path[anim.segmentIndex + 1] ?? from;
+    return {
+      x: from.x + (to.x - from.x) * progress,
+      y: from.y + (to.y - from.y) * progress,
+    };
   }
 
   private handleMouseMove = (event: MouseEvent): void => {
@@ -113,6 +552,19 @@ export class Game {
     if (!local) {
       return;
     }
+    this.lastMousePosition = local;
+    if (this.state.incomeResult) {
+      return;
+    }
+    if (this.isPanning) {
+      if (this.lastPanPosition) {
+        const deltaX = local.x - this.lastPanPosition.x;
+        const deltaY = local.y - this.lastPanPosition.y;
+        this.adjustPan(deltaX, deltaY);
+      }
+      this.lastPanPosition = local;
+      return;
+    }
     if (this.state.actionMenuOpen) {
       this.updateActionMenuHover(local.x, local.y);
     }
@@ -131,6 +583,26 @@ export class Game {
   };
 
   private handleMouseDown = (event: MouseEvent): void => {
+    if (this.state.incomeResult) {
+      if (event.button === 0) {
+        confirmIncomeResult(this.state);
+      }
+    if (this.autoMode) {
+      this.lastMousePosition = local;
+      return;
+    }
+      return;
+    }
+    if (event.button === 1) {
+      event.preventDefault();
+      const local = this.getLocalPosition(event);
+      if (!local) {
+        return;
+      }
+      this.isPanning = true;
+      this.lastPanPosition = local;
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -232,15 +704,13 @@ export class Game {
   }
 
   private getTilePositionFromLocal(localX: number, localY: number): { x: number; y: number } | null {
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-
-    if (localX < 0 || localY < 0 || localX >= mapWidthPx || localY >= mapHeightPx) {
+    const mapLocal = this.getMapLocalPosition(localX, localY);
+    if (!mapLocal) {
       return null;
     }
 
-    const x = Math.floor(localX / TILE_SIZE);
-    const y = Math.floor(localY / TILE_SIZE);
+    const x = Math.floor(mapLocal.x / TILE_SIZE);
+    const y = Math.floor(mapLocal.y / TILE_SIZE);
     return { x, y };
   }
 
@@ -259,23 +729,25 @@ export class Game {
       return false;
     }
 
-    const unitX = unit.x * TILE_SIZE;
-    const unitY = unit.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
-    const menuHeight = 16 + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - 8;
-    const maxY = mapHeightPx - menuHeight - 8;
-    const menuX = this.clamp(unitX + TILE_SIZE + 6, 8, maxX);
-    const menuY = this.clamp(unitY - 6, 8, maxY);
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(unit.x, unit.y);
+    const menuWidth = ACTION_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return false;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY < itemTop) {
       return true;
     }
@@ -299,17 +771,17 @@ export class Game {
       return false;
     }
 
-    const menuX = 16;
-    const menuY = 16;
-    const menuWidth = 220;
-    const rowHeight = 22;
-    const menuHeight = 16 + hireableUnits.length * rowHeight;
+    const menuX = MENU_PANEL_MARGIN;
+    const menuY = MENU_PANEL_MARGIN;
+    const menuWidth = HIRE_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + hireableUnits.length * rowHeight;
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return false;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY < itemTop) {
       return true;
     }
@@ -335,23 +807,25 @@ export class Game {
     }
 
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
-    const cursorX = anchor.x * TILE_SIZE;
-    const cursorY = anchor.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
-    const menuHeight = 16 + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - 8;
-    const maxY = mapHeightPx - menuHeight - 8;
-    const menuX = this.clamp(cursorX + TILE_SIZE + 6, 8, maxX);
-    const menuY = this.clamp(cursorY - 6, 8, maxY);
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(anchor.x, anchor.y);
+    const menuWidth = ACTION_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + rowHeight;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return false;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY < itemTop || localY > itemTop + rowHeight) {
       return true;
     }
@@ -375,23 +849,25 @@ export class Game {
       return;
     }
 
-    const unitX = unit.x * TILE_SIZE;
-    const unitY = unit.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
-    const menuHeight = 16 + options.length * rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - 8;
-    const maxY = mapHeightPx - menuHeight - 8;
-    const menuX = this.clamp(unitX + TILE_SIZE + 6, 8, maxX);
-    const menuY = this.clamp(unitY - 6, 8, maxY);
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(unit.x, unit.y);
+    const menuWidth = ACTION_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + options.length * rowHeight;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY < itemTop) {
       return;
     }
@@ -407,17 +883,17 @@ export class Game {
       return;
     }
 
-    const menuX = 16;
-    const menuY = 16;
-    const menuWidth = 220;
-    const rowHeight = 22;
-    const menuHeight = 16 + hireableUnits.length * rowHeight;
+    const menuX = MENU_PANEL_MARGIN;
+    const menuY = MENU_PANEL_MARGIN;
+    const menuWidth = HIRE_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + hireableUnits.length * rowHeight;
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY < itemTop) {
       return;
     }
@@ -434,23 +910,25 @@ export class Game {
     }
 
     const anchor = this.state.contextMenuAnchor ?? this.state.cursor;
-    const cursorX = anchor.x * TILE_SIZE;
-    const cursorY = anchor.y * TILE_SIZE;
-    const menuWidth = 140;
-    const rowHeight = 22;
-    const menuHeight = 16 + rowHeight;
-    const mapWidthPx = this.state.map.width * TILE_SIZE;
-    const mapHeightPx = this.state.map.height * TILE_SIZE;
-    const maxX = mapWidthPx - menuWidth - 8;
-    const maxY = mapHeightPx - menuHeight - 8;
-    const menuX = this.clamp(cursorX + TILE_SIZE + 6, 8, maxX);
-    const menuY = this.clamp(cursorY - 6, 8, maxY);
+    const view = this.getMapView();
+    const screenPos = this.getScreenPositionFromTile(anchor.x, anchor.y);
+    const menuWidth = ACTION_MENU_WIDTH;
+    const rowHeight = MENU_ROW_HEIGHT;
+    const menuHeight = MENU_PADDING_Y + rowHeight;
+    const frameWidthPx = getMapFrameWidth();
+    const frameHeightPx = getMapFrameHeight();
+    const minX = MENU_EDGE_PADDING;
+    const minY = MENU_EDGE_PADDING;
+    const maxX = frameWidthPx - menuWidth - MENU_EDGE_PADDING;
+    const maxY = frameHeightPx - menuHeight - MENU_EDGE_PADDING;
+    const menuX = this.clamp(screenPos.x + TILE_SIZE * view.zoom + MENU_UNIT_OFFSET, minX, maxX);
+    const menuY = this.clamp(screenPos.y - MENU_UNIT_OFFSET, minY, maxY);
 
     if (localX < menuX || localX > menuX + menuWidth || localY < menuY || localY > menuY + menuHeight) {
       return;
     }
 
-    const itemTop = menuY + 8;
+    const itemTop = menuY + MENU_ITEM_TOP;
     if (localY >= itemTop && localY <= itemTop + rowHeight) {
       this.state.contextMenuIndex = 0;
     }

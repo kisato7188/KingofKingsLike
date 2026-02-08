@@ -1,2 +1,24 @@
-export const TILE_SIZE = 128;
+export const TILE_SIZE = 112;
+export const VIEW_TILES_X = 14;
+export const VIEW_TILES_Y = 7;
 export const SIDEBAR_WIDTH = 260;
+export const UI_SCALE = 2;
+
+export const ACTION_MENU_WIDTH = Math.round(140 * UI_SCALE);
+export const HIRE_MENU_WIDTH = Math.round(220 * UI_SCALE);
+export const MENU_ROW_HEIGHT = Math.round(22 * UI_SCALE);
+export const MENU_PADDING_Y = Math.round(16 * UI_SCALE);
+export const MENU_ITEM_TOP = Math.round(8 * UI_SCALE);
+export const MENU_EDGE_PADDING = Math.round(8 * UI_SCALE);
+export const MENU_UNIT_OFFSET = Math.round(6 * UI_SCALE);
+export const MENU_PANEL_MARGIN = Math.round(16 * UI_SCALE);
+export const MENU_HIGHLIGHT_INSET = Math.round(4 * UI_SCALE);
+export const MENU_HIGHLIGHT_OFFSET = Math.round(2 * UI_SCALE);
+export const MENU_TEXT_OFFSET_X = Math.round(10 * UI_SCALE);
+export const MENU_FONT_SIZE = Math.round(14 * UI_SCALE);
+export const CURSOR_STROKE_WIDTH = Math.round(2 * UI_SCALE);
+export const CURSOR_INSET = Math.round(1 * UI_SCALE);
+export const ACTION_LABEL_FONT_SIZE = 18;
+export const SIDEBAR_FONT_SIZE = 21;
+export const SIDEBAR_LINE_HEIGHT = 27;
+export const SIDEBAR_PANEL_PADDING = 8;
